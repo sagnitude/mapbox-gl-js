@@ -38,8 +38,8 @@ import type {FormattedSection} from '../style-spec/expression/types/formatted';
 
 export type BinderUniform = {
     name: string,
-    property: string,
-    binding: Uniform<any>
+    property?: string,
+    binding?: Uniform<any>
 };
 
 export type BinderAttributes = {
@@ -529,6 +529,19 @@ export default class ProgramConfiguration {
 
     getPaintVertexBuffers(): Array<VertexBuffer> {
         return this._buffers;
+    }
+
+    getBinderUniforms(): Array<BinderUniform> {
+        const uniforms = [];
+        for (const property in this.binders) {
+            const binder = this.binders[property];
+            if (binder instanceof ConstantBinder || binder instanceof CrossFadedConstantBinder || binder instanceof CompositeExpressionBinder) {
+                for (const name of binder.uniformNames) {
+                    uniforms.push({name});
+                }
+            }
+        }
+        return uniforms;
     }
 
     getUniforms(context: Context, locations: UniformLocations): Array<BinderUniform> {

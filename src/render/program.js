@@ -21,11 +21,12 @@ export type DrawMode =
     | $PropertyType<WebGLRenderingContext, 'TRIANGLES'>
     | $PropertyType<WebGLRenderingContext, 'LINE_STRIP'>;
 
-function getTokenizedAttributes (attrArray: Array<string>) {
+function getTokenizedAttributesAndUniforms (array: Array<string>) {
     const result = [];
 
-    for (let i = 0; i < attrArray.length; i++) {
-        const token = attrArray[i].split(' ');
+    for (let i = 0; i < array.length; i++) {
+        if (array[i] === null) continue;
+        const token = array[i].split(' ');
         result.push({name: token[2], type: token[1]});
     }
     return result;
@@ -41,7 +42,7 @@ class Program<Us: UniformBindings> {
 
     constructor(context: Context,
                 name: string,
-                source: {fragmentSource: string, vertexSource: string, staticAttributes: Array<string>},
+                source: {fragmentSource: string, vertexSource: string, staticAttributes: Array<string>, allUniforms: Array<string>},
                 // source: {fragmentSource: string, vertexSource: string},
                 configuration: ?ProgramConfiguration,
                 fixedUniforms: (Context, UniformLocations) => Us,
@@ -50,9 +51,13 @@ class Program<Us: UniformBindings> {
         this.program = gl.createProgram();
 
         // get All shader attribute info
-        const staticAttrInfo = getTokenizedAttributes(source.staticAttributes);
+        const staticAttrInfo = getTokenizedAttributesAndUniforms(source.staticAttributes);
         const dynamicAttrInfo = configuration ? configuration.getAttributes() : [];
         const allAttrInfo = staticAttrInfo.concat(dynamicAttrInfo);
+
+        // const staticUniformsInfo = source.allUniforms ? getTokenizedAttributesAndUniforms(source.allUniforms) : [];
+        // const dynamicUniformsInfo = configuration ? configuration.getBinderUniforms() : [];
+        // const allUniformsInfo = staticUniformsInfo.concat(dynamicUniformsInfo);
 
         const defines = configuration ? configuration.defines() : [];
         if (showOverdrawInspector) {
@@ -87,7 +92,8 @@ class Program<Us: UniformBindings> {
         // entire layer (see #4607, #4728)
         let cnt = 0;
         this.attributes = {};
-        while (cnt < allAttrInfo.length) {
+        this.numAttributes = allAttrInfo.length;
+        while (cnt < this.numAttributes) {
             gl.bindAttribLocation(this.program, cnt, allAttrInfo[cnt].name);
             this.attributes[allAttrInfo[cnt].name] = cnt;
             cnt++;
@@ -95,12 +101,12 @@ class Program<Us: UniformBindings> {
 
         gl.linkProgram(this.program);
         assert(gl.getProgramParameter(this.program, gl.LINK_STATUS), (gl.getProgramInfoLog(this.program): any));
-        this.numAttributes = allAttrInfo.length;
         
         const uniformLocations = {};
-        const start = performance.now();
         const numUniforms = gl.getProgramParameter(this.program, gl.ACTIVE_UNIFORMS);
-        console.log(`getProgramParameter for active uniforms: ${performance.now() - start}`);
+        // const numUniforms = allUniformsInfo.length;
+        // console.log(`*number of Uniforms calculated: ${numUniforms}`);
+        // console.log(`**number of Uniforms from gl: ${gl.getProgramParameter(this.program, gl.ACTIVE_UNIFORMS)}`);
         
         for (let i = 0; i < numUniforms; i++) {
             // start = performance.now();
