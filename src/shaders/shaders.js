@@ -87,8 +87,7 @@ export const symbolTextAndIcon = compile(symbolTextAndIconFrag, symbolTextAndIco
 function compile(fragmentSource, vertexSource) {
     const re = /#pragma mapbox: ([\w]+) ([\w]+) ([\w]+) ([\w]+)/g;
     const attributeRegex = /attribute ([\w]+) ([\w]+)/g;
-    const uniformRegex = /uniform ([\w]+) ([\w]+)/g;
-
+    const uniformRegex = /uniform ([\w]+) ([\w]+)([\s]*)([\w]*)/g;
 
     const staticAttributes = vertexSource.match(attributeRegex);
     const fragmentUniforms = fragmentSource.match(uniformRegex);
