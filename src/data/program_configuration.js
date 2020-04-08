@@ -38,8 +38,8 @@ import type {FormattedSection} from '../style-spec/expression/types/formatted';
 
 export type BinderUniform = {
     name: string,
-    property?: string,
-    binding?: Uniform<any>
+    property: string,
+    binding: Uniform<any>
 };
 
 function packColor(color: Color): [number, number] {
@@ -505,27 +505,26 @@ export default class ProgramConfiguration {
         return result;
     }
 
-    getBinderAttributes(): Array<any> {
+    getBinderAttributes(): Array<string> {
         const result = [];
         for (const property in this.binders) {
             const binder = this.binders[property];
             if (binder instanceof CrossFadedCompositeBinder || binder instanceof SourceExpressionBinder || binder instanceof CompositeExpressionBinder) {
                 for (let i = 0; i < binder.paintVertexAttributes.length; i++) {
-                    result.push({
-                        name: binder.paintVertexAttributes[i].name});
+                    result.push(binder.paintVertexAttributes[i].name);
                 }
             }
         }
         return result;
     }
 
-    getBinderUniforms(): Array<BinderUniform> {
+    getBinderUniforms(): Array<string> {
         const uniforms = [];
         for (const property in this.binders) {
             const binder = this.binders[property];
             if (binder instanceof ConstantBinder || binder instanceof CrossFadedConstantBinder || binder instanceof CompositeExpressionBinder) {
                 for (const uniformName of binder.uniformNames) {
-                    uniforms.push({name: uniformName});
+                    uniforms.push(uniformName);
                 }
             }
         }

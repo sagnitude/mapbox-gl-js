@@ -21,13 +21,13 @@ export type DrawMode =
     | $PropertyType<WebGLRenderingContext, 'TRIANGLES'>
     | $PropertyType<WebGLRenderingContext, 'LINE_STRIP'>;
 
-function getTokenizedAttributesAndUniforms (array: Array<string>) {
+function getTokenizedAttributesAndUniforms (array: Array<string>): Array<string> {
     const result = [];
 
     for (let i = 0; i < array.length; i++) {
         if (array[i] === null) continue;
         const token = array[i].split(' ');
-        result.push({name: token.pop()});
+        result.push(token.pop());
     }
     return result;
 }
@@ -90,7 +90,7 @@ class Program<Us: UniformBindings> {
 
         this.numAttributes = allAttrInfo.length;
         for (let i = 0; i < this.numAttributes; i++) {
-            gl.bindAttribLocation(this.program, i, allAttrInfo[i].name);
+            gl.bindAttribLocation(this.program, i, allAttrInfo[i]);
         }
 
         gl.linkProgram(this.program);
@@ -104,18 +104,18 @@ class Program<Us: UniformBindings> {
 
         for (let i = 0; i < this.numAttributes; i++) {
             if (allAttrInfo[i]) {
-                gl.bindAttribLocation(this.program, i, allAttrInfo[i].name);
-                this.attributes[allAttrInfo[i].name] = i;
+                gl.bindAttribLocation(this.program, i, allAttrInfo[i]);
+                this.attributes[allAttrInfo[i]] = i;
             }
         }
 
         const uniformsArray = Array.from(allUniformsInfo);
         for (let it = 0; it < uniformsArray.length; it++) {
             const uniform = uniformsArray[it];
-            if (uniform && !uniformLocations[uniform.name]) {
-                const uniformLocation = gl.getUniformLocation(this.program, uniform.name);
+            if (uniform && !uniformLocations[uniform]) {
+                const uniformLocation = gl.getUniformLocation(this.program, uniform);
                 if (uniformLocation) {
-                    uniformLocations[uniform.name] = uniformLocation;
+                    uniformLocations[uniform] = uniformLocation;
                 }
             }
         }
