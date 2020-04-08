@@ -86,13 +86,11 @@ export const symbolTextAndIcon = compile(symbolTextAndIconFrag, symbolTextAndIco
 
 function compile(fragmentSource, vertexSource) {
     const re = /#pragma mapbox: ([\w]+) ([\w]+) ([\w]+) ([\w]+)/g;
-    const attributeRegex = /attribute ([\w]+) ([\w]+)/g;
-    const uniformRegex = /uniform ([\w]+) ([\w]+)([\s]*)([\w]*)/g;
 
-    const staticAttributes = vertexSource.match(attributeRegex);
-    const fragmentUniforms = fragmentSource.match(uniformRegex);
-    const vertexUniforms = vertexSource.match(uniformRegex);
-    const allUniforms = vertexUniforms ? vertexUniforms.concat(fragmentUniforms) : fragmentUniforms;
+    const staticAttributes = vertexSource.match(/attribute ([\w]+) ([\w]+)/g);
+    const fragmentUniforms = fragmentSource.match(/uniform ([\w]+) ([\w]+)([\s]*)([\w]*)/g);
+    const vertexUniforms = vertexSource.match(/uniform ([\w]+) ([\w]+)([\s]*)([\w]*)/g);
+    const staticUniforms = vertexUniforms ? vertexUniforms.concat(fragmentUniforms) : fragmentUniforms;
 
     const fragmentPragmas = {};
 
@@ -183,5 +181,5 @@ uniform ${precision} ${type} u_${name};
         }
     });
 
-    return {fragmentSource, vertexSource, staticAttributes, allUniforms};
+    return {fragmentSource, vertexSource, staticAttributes, staticUniforms};
 }

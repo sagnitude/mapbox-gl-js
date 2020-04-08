@@ -41,7 +41,7 @@ class Program<Us: UniformBindings> {
 
     constructor(context: Context,
             name: string,
-            source: {fragmentSource: string, vertexSource: string, staticAttributes: Array<string>, allUniforms: Array<string>},
+            source: {fragmentSource: string, vertexSource: string, staticAttributes: Array<string>, staticUniforms: Array<string>},
             configuration: ?ProgramConfiguration,
             fixedUniforms: (Context, UniformLocations) => Us,
             showOverdrawInspector: boolean) {
@@ -52,7 +52,7 @@ class Program<Us: UniformBindings> {
         const dynamicAttrInfo = configuration ? configuration.getBinderAttributes() : [];
         const allAttrInfo = staticAttrInfo.concat(dynamicAttrInfo);
 
-        const staticUniformsInfo = source.allUniforms ? getTokenizedAttributesAndUniforms(source.allUniforms) : [];
+        const staticUniformsInfo = source.staticUniforms ? getTokenizedAttributesAndUniforms(source.staticUniforms) : [];
         const dynamicUniformsInfo = configuration ? configuration.getBinderUniforms() : [];
         const allUniformsInfo = new Set(staticUniformsInfo.concat(dynamicUniformsInfo));
 
