@@ -5,6 +5,8 @@ import EXTENT from '../data/extent';
 import Point from '@mapbox/point-geometry';
 import MercatorCoordinate from '../geo/mercator_coordinate';
 
+import LRUCache from "mnemonist/lru-cache";
+
 import assert from 'assert';
 import {register} from '../util/web_worker_transfer';
 
@@ -179,11 +181,32 @@ export class OverscaledTileID {
     }
 }
 
+var zKeyCache = [];
+(function () {
+    for (var i = 0; i < 100; i++) {
+        zKeyCache[i] = i.toString(36);
+    }
+})();
+
+var cache = new LRUCache(10000);
+
+function toString(num: number) {
+    var str = cache.get(num);
+    if (str !== undefined) {
+        return str;
+    }
+    str = num.toString(36);
+    cache.set(num, str);
+    return str;
+}
+
 function calculateKey(wrap: number, overscaledZ: number, z: number, x: number, y: number): string {
     wrap *= 2;
     if (wrap < 0) wrap = wrap * -1 - 1;
     const dim = 1 << z;
-    return (dim * dim * wrap + dim * y + x).toString(36) + z.toString(36) + overscaledZ.toString(36);
+    // return toString(dim * dim * wrap + dim * y + x) + toString(z) + toString(overscaledZ);
+    return toString(dim * dim * wrap + dim * y + x) + zKeyCache[z] + zKeyCache[overscaledZ];
+    // return (dim * dim * wrap + dim * y + x).toString(36) + zKeyCache[z] + zKeyCache[overscaledZ];
 }
 
 function getQuadkey(z, x, y) {
