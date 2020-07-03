@@ -54,7 +54,9 @@ function drawExtrusionTiles(painter, source, layer, coords, depthMode, stencilMo
     const context = painter.context;
     const gl = context.gl;
     const patternProperty = layer.paint.get('fill-extrusion-pattern');
+    const patternPropertyTop = layer.paint.get('fill-extrusion-top-pattern');
     const image = patternProperty.constantOr((1: any));
+    const imageTop = patternPropertyTop.constantOr((1: any));
     const crossfade = layer.getCrossfadeParameters();
     const opacity = layer.paint.get('fill-extrusion-opacity');
 
@@ -87,6 +89,19 @@ function drawExtrusionTiles(painter, source, layer, coords, depthMode, stencilMo
             const atlas = tile.imageAtlas;
             const posTo = atlas.patternPositions[constantPattern.to.toString()];
             const posFrom = atlas.patternPositions[constantPattern.from.toString()];
+            if (posTo && posFrom) programConfiguration.setConstantPatternPositions(posTo, posFrom);
+        }
+
+        if (imageTop) {
+            painter.context.activeTexture.set(gl.TEXTURE1);
+            tile.imageAtlasTexture2.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
+            programConfiguration.updatePaintBuffers(crossfade);
+        }
+        const constantPattern2 = patternProperty.constantOr(null);
+        if (constantPattern2 && tile.imageAtlas2) {
+            const atlas = tile.imageAtlas2;
+            const posTo = atlas.patternPositions[constantPattern2.to.toString()];
+            const posFrom = atlas.patternPositions[constantPattern2.from.toString()];
             if (posTo && posFrom) programConfiguration.setConstantPatternPositions(posTo, posFrom);
         }
 

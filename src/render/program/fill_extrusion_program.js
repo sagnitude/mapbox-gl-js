@@ -38,6 +38,7 @@ export type FillExtrusionPatternUniformsType = {|
     // pattern uniforms:
     'u_texsize': Uniform2f,
     'u_image': Uniform1i,
+    'u_image_top': Uniform1i,
     'u_pixel_coord_upper': Uniform2f,
     'u_pixel_coord_lower': Uniform2f,
     'u_scale': Uniform3f,
@@ -63,6 +64,7 @@ const fillExtrusionPatternUniforms = (context: Context, locations: UniformLocati
     'u_height_factor': new Uniform1f(context, locations.u_height_factor),
     // pattern uniforms
     'u_image': new Uniform1i(context, locations.u_image),
+    'u_image_top': new Uniform1i(context, locations.u_image_top),
     'u_texsize': new Uniform2f(context, locations.u_texsize),
     'u_pixel_coord_upper': new Uniform2f(context, locations.u_pixel_coord_upper),
     'u_pixel_coord_lower': new Uniform2f(context, locations.u_pixel_coord_lower),

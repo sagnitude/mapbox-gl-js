@@ -211,7 +211,9 @@ class FillExtrusionBucket implements Bucket {
 
     populate(features: Array<IndexedFeature>, options: PopulateParameters, canonical: CanonicalTileID) {
         this.features = [];
+        // assigns $type-patter values to options.patternDependencies
         this.hasPattern = hasPattern('fill-extrusion', this.layers, options);
+        hasPattern('fill-extrusion-top', this.layers, options, 'patternDependencies2');
         this.featuresOnBorder = [];
         this.borders = [[], [], [], []];
         this.borderDone = [false, false, false, false];
@@ -235,6 +237,7 @@ class FillExtrusionBucket implements Bucket {
 
             if (this.hasPattern) {
                 this.features.push(addPatternDependencies('fill-extrusion', this.layers, bucketFeature, this.zoom, options));
+                this.features.push(addPatternDependencies('fill-extrusion-top', this.layers, bucketFeature, this.zoom, options, 'patternDependencies2'));
             } else {
                 this.addFeature(bucketFeature, bucketFeature.geometry, index, canonical, {});
             }

@@ -13,8 +13,8 @@ type PatternStyleLayers =
     Array<FillStyleLayer> |
     Array<FillExtrusionStyleLayer>;
 
-export function hasPattern(type: string, layers: PatternStyleLayers, options: PopulateParameters) {
-    const patterns = options.patternDependencies;
+export function hasPattern(type: string, layers: PatternStyleLayers, options: PopulateParameters, patternKey: string) {
+    const patterns = options[patternKey || 'patternDependencies'];
     let hasPattern = false;
 
     for (const layer of layers) {
@@ -34,8 +34,9 @@ export function hasPattern(type: string, layers: PatternStyleLayers, options: Po
     return hasPattern;
 }
 
-export function addPatternDependencies(type: string, layers: PatternStyleLayers, patternFeature: BucketFeature, zoom: number, options: PopulateParameters) {
-    const patterns = options.patternDependencies;
+export function addPatternDependencies(type: string, layers: PatternStyleLayers, patternFeature: BucketFeature, zoom: number,
+                                       options: PopulateParameters, patternKey: string) {
+    const patterns = options[patternKey || 'patternDependencies'];
     for (const layer of layers) {
         const patternProperty = layer.paint.get(`${type}-pattern`);
 

@@ -214,6 +214,8 @@ class ImageManager extends Evented {
     getPattern(id: string): ?ImagePosition {
         const pattern = this.patterns[id];
 
+        console.log('get pattern', id, pattern, this);
+
         const image = this.getImage(id);
         if (!image) {
             return null;

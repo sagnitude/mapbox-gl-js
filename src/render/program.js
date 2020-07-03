@@ -126,6 +126,7 @@ class Program<Us: UniformBindings> {
         }
 
         this.fixedUniforms = fixedUniforms(context, uniformLocations);
+        this.fixedUniformNames = Object.keys(this.fixedUniforms);
         this.binderUniforms = configuration ? configuration.getUniforms(context, uniformLocations) : [];
         if (fixedDefines.indexOf('TERRAIN') !== -1) { this.terrainUniforms = terrainUniforms(context, uniformLocations); }
     }
@@ -169,7 +170,8 @@ class Program<Us: UniformBindings> {
         context.setColorMode(colorMode);
         context.setCullFace(cullFaceMode);
 
-        for (const name in this.fixedUniforms) {
+        for (let i = 0; i < this.fixedUniformNames.length; i++) {
+            let name = this.fixedUniformNames[i];
             this.fixedUniforms[name].set(uniformValues[name]);
         }
 
@@ -177,11 +179,24 @@ class Program<Us: UniformBindings> {
             configuration.setUniforms(context, this.binderUniforms, currentProperties, {zoom: (zoom: any)});
         }
 
-        const primitiveSize = {
-            [gl.LINES]: 2,
-            [gl.TRIANGLES]: 3,
-            [gl.LINE_STRIP]: 1
-        }[drawMode];
+        // const primitiveSize = {
+        //     [gl.LINES]: 2,
+        //     [gl.TRIANGLES]: 3,
+        //     [gl.LINE_STRIP]: 1
+        // }[drawMode];
+
+        var primitiveSize = 1;
+        switch (drawMode) {
+            case gl.LINES:
+                primitiveSize = 2;
+                break;
+            case gl.TRIANGLES:
+                primitiveSize = 3;
+                break;
+            case gl.LINE_STRIP:
+                primitiveSize = 1;
+                break;
+        }
 
         for (const segment of segments.get()) {
             const vaos = segment.vaos || (segment.vaos = {});

@@ -37,6 +37,7 @@ type BackgroundPatternUniformsType = {|
 export type PatternUniformsType = {|
     // pattern uniforms:
     'u_image': Uniform1i,
+    'u_image_top': Uniform1i,
     'u_texsize': Uniform2f,
     'u_scale': Uniform3f,
     'u_fade': Uniform1f,
@@ -58,6 +59,7 @@ function patternUniformValues(crossfade: CrossfadeParameters, painter: Painter,
 
     return {
         'u_image': 0,
+        'u_image_top': 1,
         'u_texsize': tile.imageAtlasTexture.size,
         'u_scale': [tileRatio, crossfade.fromScale, crossfade.toScale],
         'u_fade': crossfade.t,

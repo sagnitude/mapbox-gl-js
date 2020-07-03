@@ -176,6 +176,8 @@ export class Transitionable<Props: Object> {
     }
 
     getValue<S: string, T>(name: S): PropertyValueSpecification<T> | void {
+        if (!this._values[name]) return null;
+        if (!this._values[name].value) return null;
         return clone(this._values[name].value.value);
     }
 
