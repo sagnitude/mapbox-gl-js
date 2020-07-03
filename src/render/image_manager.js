@@ -88,7 +88,6 @@ class ImageManager extends Evented {
     addImage(id: string, image: StyleImage) {
         assert(!this.images[id]);
         if (this._validate(id, image)) {
-            console.log('add image', id, image);
             this.images[id] = image;
         }
     }
