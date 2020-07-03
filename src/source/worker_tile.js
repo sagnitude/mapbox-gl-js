@@ -79,6 +79,7 @@ class WorkerTile {
             featureIndex,
             iconDependencies: {},
             patternDependencies: {},
+            patternDependencies2: {},
             glyphDependencies: {},
             availableImages
         };
@@ -133,6 +134,7 @@ class WorkerTile {
         let glyphMap: ?{[_: string]: {[_: number]: ?StyleGlyph}};
         let iconMap: ?{[_: string]: StyleImage};
         let patternMap: ?{[_: string]: StyleImage};
+        let patternMap2: ?{[_: string]: StyleImage};
 
         const stacks = mapObject(options.glyphDependencies, (glyphs) => Object.keys(glyphs).map(Number));
         if (Object.keys(stacks).length) {
@@ -160,17 +162,19 @@ class WorkerTile {
             iconMap = {};
         }
 
-        const patterns = Object.keys(options.patternDependencies);
-        if (patterns.length) {
-            actor.send('getImages', {icons: patterns, source: this.source, tileID: this.tileID, type: 'patterns'}, (err, result) => {
+        const allPatterns = [].concat(Object.keys(options.patternDependencies)).concat(Object.keys(options.patternDependencies2));
+        if (allPatterns.length) {
+            actor.send('getImages', {icons: allPatterns, source: this.source, tileID: this.tileID, type: 'patterns'}, (err, result) => {
                 if (!error) {
                     error = err;
-                    patternMap = result;
+                    patternMap = Object.keys(options.patternDependencies).reduce((map, key) => {map[key] = result[key]; return map;}, {});
+                    patternMap2 = Object.keys(options.patternDependencies2).reduce((map, key) => {map[key] = result[key]; return map;}, {});
                     maybePrepare.call(this);
                 }
             });
         } else {
             patternMap = {};
+            patternMap2 = {};
         }
 
         maybePrepare.call(this);
@@ -178,9 +182,10 @@ class WorkerTile {
         function maybePrepare() {
             if (error) {
                 return callback(error);
-            } else if (glyphMap && iconMap && patternMap) {
+            } else if (glyphMap && iconMap && patternMap && patternMap2) {
                 const glyphAtlas = new GlyphAtlas(glyphMap);
                 const imageAtlas = new ImageAtlas(iconMap, patternMap);
+                const imageAtlas2 = new ImageAtlas(iconMap, patternMap2);
 
                 for (const key in buckets) {
                     const bucket = buckets[key];
@@ -203,6 +208,7 @@ class WorkerTile {
                     collisionBoxArray: this.collisionBoxArray,
                     glyphAtlasImage: glyphAtlas.image,
                     imageAtlas,
+                    imageAtlas2,
                     // Only used for benchmarking:
                     glyphMap: this.returnDependencies ? glyphMap : null,
                     iconMap: this.returnDependencies ? iconMap : null,
