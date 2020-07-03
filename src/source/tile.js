@@ -56,6 +56,8 @@ class Tile {
     latestRawTileData: ?ArrayBuffer;
     imageAtlas: ?ImageAtlas;
     imageAtlasTexture: Texture;
+    imageAtlas2: ?ImageAtlas;
+    imageAtlasTexture2: Texture;
     glyphAtlasImage: ?AlphaImage;
     glyphAtlasTexture: Texture;
     expirationTime: any;
@@ -201,6 +203,9 @@ class Tile {
         if (data.imageAtlas) {
             this.imageAtlas = data.imageAtlas;
         }
+        if (data.imageAtlas2) {
+            this.imageAtlas2 = data.imageAtlas2;
+        }
         if (data.glyphAtlasImage) {
             this.glyphAtlasImage = data.glyphAtlasImage;
         }
@@ -221,8 +226,16 @@ class Tile {
             this.imageAtlasTexture.destroy();
         }
 
+        if (this.imageAtlasTexture2) {
+            this.imageAtlasTexture2.destroy();
+        }
+
         if (this.imageAtlas) {
             this.imageAtlas = null;
+        }
+
+        if (this.imageAtlas2) {
+            this.imageAtlas2 = null;
         }
 
         if (this.glyphAtlasTexture) {
@@ -251,6 +264,11 @@ class Tile {
             this.imageAtlas.uploaded = true;
         }
 
+        if (this.imageAtlas2 && !this.imageAtlas2.uploaded) {
+            this.imageAtlasTexture2 = new Texture(context, this.imageAtlas2.image, gl.RGBA);
+            this.imageAtlas2.uploaded = true;
+        }
+
         if (this.glyphAtlasImage) {
             this.glyphAtlasTexture = new Texture(context, this.glyphAtlasImage, gl.ALPHA);
             this.glyphAtlasImage = null;
@@ -260,6 +278,9 @@ class Tile {
     prepare(imageManager: ImageManager) {
         if (this.imageAtlas) {
             this.imageAtlas.patchUpdatedImages(imageManager, this.imageAtlasTexture);
+        }
+        if (this.imageAtlas2) {
+            this.imageAtlas2.patchUpdatedImages(imageManager, this.imageAtlasTexture2);
         }
     }
 

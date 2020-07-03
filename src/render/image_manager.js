@@ -88,6 +88,7 @@ class ImageManager extends Evented {
     addImage(id: string, image: StyleImage) {
         assert(!this.images[id]);
         if (this._validate(id, image)) {
+            console.log('add image', id, image);
             this.images[id] = image;
         }
     }
@@ -213,6 +214,8 @@ class ImageManager extends Evented {
 
     getPattern(id: string): ?ImagePosition {
         const pattern = this.patterns[id];
+
+        console.log('get pattern', id, pattern, this);
 
         const image = this.getImage(id);
         if (!image) {
