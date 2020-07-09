@@ -8,7 +8,7 @@ const minified = MINIFY === 'true';
 const production = BUILD === 'production';
 const outputFile =
     !production ? 'dist/mapbox-gl-dev.js' :
-    minified ? 'dist/mapbox-gl.js' : 'dist/mapbox-gl-unminified.js';
+    minified ? 'dist/mapbox-gl.js' : '../../ids/idsWeb/IDSWebSMap/app/lib/mapbox-gl-unminified.js';
 
 export default [{
     // First, use code splitting to bundle GL JS into three "chunks":
