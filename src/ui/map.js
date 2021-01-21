@@ -2606,7 +2606,7 @@ class Map extends Camera {
             if (!this.isMoving() && this.loaded()) {
                 this.fire(new Event('idle'));
                 if (this._isInitialLoad) {
-                    this._authenticate();
+                    // this._authenticate();
                 }
                 this._isInitialLoad = false;
                 // check the options to see if need to calculate the speed index

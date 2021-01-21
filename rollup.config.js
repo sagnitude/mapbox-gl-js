@@ -11,14 +11,14 @@ const bench = BUILD === 'bench';
 function buildType(build, minified) {
     switch (build) {
         case 'production':
-            if (minified) return 'dist/mapbox-gl.js';
-            return '../../ids/idsWeb/IDSWebSMap/app/lib/mapbox-gl-unminified.js';
+            if (minified) return 'dist/mapbox-gl-2.0.0.js';
+            return 'dist/mapbox-gl-unminified-2.0.0.js';
         case 'bench':
-            return 'dist/mapbox-gl-bench.js';
+            return 'dist/mapbox-gl-bench-2.0.0.js';
         case 'dev':
-            return 'dist/mapbox-gl-dev.js';
+            return 'dist/mapbox-gl-dev-2.0.0.js';
         default:
-            return 'dist/mapbox-gl-dev.js';
+            return 'dist/mapbox-gl-dev-2.0.0.js';
     }
 }
 const outputFile = buildType(BUILD, MINIFY);
