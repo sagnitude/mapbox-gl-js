@@ -97,7 +97,7 @@ function drawExtrusionTiles(painter, source, layer, coords, depthMode, stencilMo
             tile.imageAtlasTexture2.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
             programConfiguration.updatePaintBuffers(crossfade);
         }
-        const constantPattern2 = patternProperty.constantOr(null);
+        const constantPattern2 = patternPropertyTop.constantOr(null);
         if (constantPattern2 && tile.imageAtlas2) {
             const atlas = tile.imageAtlas2;
             const posTo = atlas.patternPositions[constantPattern2.to.toString()];

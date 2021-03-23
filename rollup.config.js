@@ -2,6 +2,7 @@ import fs from 'fs';
 import sourcemaps from 'rollup-plugin-sourcemaps';
 import {plugins} from './build/rollup_plugins';
 import banner from './build/banner';
+import {getBabelOutputPlugin} from '@rollup/plugin-babel';
 
 const {BUILD, MINIFY} = process.env;
 const minified = MINIFY === 'true';
@@ -21,6 +22,7 @@ function buildType(build, minified) {
             return 'dist/mapbox-gl-dev-2.0.0.js';
     }
 }
+
 const outputFile = buildType(BUILD, MINIFY);
 
 export default [{
@@ -50,6 +52,7 @@ export default [{
     output: {
         name: 'mapboxgl',
         file: outputFile,
+        // format: 'esm',
         format: 'umd',
         sourcemap: production ? true : 'inline',
         indent: false,
@@ -60,6 +63,16 @@ export default [{
     plugins: [
         // Ingest the sourcemaps produced in the first step of the build.
         // This is the only reason we use Rollup for this second pass
+        // getBabelOutputPlugin({
+        //     presets: [
+        //         ['@babel/preset-env', {modules: 'umd'}]
+        //     ],
+        //     minified: false,
+        //     compact: false,
+        //     generatorOpts: {},
+        //     moduleId: 'mapboxgl',
+        //     moduleRoot: 'default',
+        // }),
         sourcemaps()
     ],
 }];
