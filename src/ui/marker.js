@@ -480,6 +480,10 @@ export default class Marker extends Evented {
             rotation = `rotateZ(${this._rotation}deg)`;
         } else if (this._rotationAlignment === "map") {
             rotation = `rotateZ(${this._rotation - this._map.getBearing()}deg)`;
+        } else if (this._rotationAlignment === "perspective") {
+            rotation = `rotateY(${this._rotation}deg)`;
+        } else if (this._rotationAlignment === "perspective_map") {
+            rotation = `rotateY(${this._rotation - this._map.getBearing()}deg)`;
         }
 
         let pitch = "";
@@ -487,6 +491,8 @@ export default class Marker extends Evented {
             pitch = "rotateX(0deg)";
         } else if (this._pitchAlignment === "map") {
             pitch = `rotateX(${this._map.getPitch()}deg)`;
+        } else if (this._pitchAlignment === "complementary_map") {
+            pitch = `rotateX(${90 - this._map.getPitch()}deg)`;
         }
 
         // because rounding the coordinates at every `move` event causes stuttered zooming
