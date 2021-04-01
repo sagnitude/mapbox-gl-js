@@ -125,9 +125,13 @@ function getScaledPoint(el: HTMLElement, rect: ClientRect, e: MouseEvent | Wheel
     // we use this dirty trick which would not work for the case of rotated transforms, but works well for
     // the case of simple scaling.
     // Note: `el.offsetWidth === rect.width` eliminates the `0/0` case.
-    const scaling = (el.offsetWidth === rect.width ? 1 : el.offsetWidth / rect.width) / (window._globalScale || 1);
+    const pixelZoom = window._globalScale || 1;
+    const scaling = el.offsetWidth === rect.width ? 1 : el.offsetWidth / rect.width;
+    // offsetWidth is in logical pixels (zoomed)
+    // clientX is in physical pixels (not zoomed)
+    // getBoundingClientRect is in logical pixels (zoomed)
     return new Point(
-        (e.clientX - rect.left) * scaling,
-        (e.clientY - rect.top) * scaling
+        (e.clientX / pixelZoom - rect.left) * scaling,
+        (e.clientY / pixelZoom - rect.top) * scaling
     );
 }
