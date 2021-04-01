@@ -61,7 +61,7 @@ const exported = {
         return linkEl.href;
     },
 
-    get devicePixelRatio() { return window.devicePixelRatio; },
+    get devicePixelRatio() { return (window._globalScale || 1) * window.devicePixelRatio; },
     get prefersReducedMotion(): boolean {
         if (!window.matchMedia) return false;
         //Lazily initialize media query
