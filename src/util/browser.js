@@ -1,13 +1,11 @@
 // @flow strict
 
-import window from './window';
-import type {Cancelable} from '../types/cancelable';
+import window from './window.js';
+import type {Cancelable} from '../types/cancelable.js';
 
 let linkEl;
 
 let reducedMotionQuery: MediaQueryList;
-
-let errorState = false;
 
 let stubTime;
 
@@ -16,7 +14,8 @@ let stubTime;
  */
 const exported = {
     /**
-     * Returns either performance.now() or a value set by setNow
+     * Returns either performance.now() or a value set by setNow.
+     * @returns Time value in milliseconds.
      */
     now(): number {
         if (stubTime !== undefined) {
@@ -24,11 +23,6 @@ const exported = {
         }
         return window.performance.now();
     },
-
-    setErrorState() {
-        errorState = true;
-    },
-
     setNow(time: number) {
         stubTime = time;
     },
@@ -38,7 +32,6 @@ const exported = {
     },
 
     frame(fn: (paintStartTimestamp: number) => void): Cancelable {
-        if (errorState) return {cancel: () => {  }};
         const frame = window.requestAnimationFrame(fn);
         return {cancel: () => window.cancelAnimationFrame(frame)};
     },

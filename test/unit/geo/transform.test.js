@@ -1,14 +1,14 @@
-import {test} from '../../util/test';
+import {test} from '../../util/test.js';
 import Point from '@mapbox/point-geometry';
-import Transform from '../../../src/geo/transform';
-import LngLat from '../../../src/geo/lng_lat';
-import {OverscaledTileID, CanonicalTileID} from '../../../src/source/tile_id';
-import {fixedNum, fixedLngLat, fixedCoord, fixedPoint, fixedVec3, fixedVec4} from '../../util/fixed';
-import {FreeCameraOptions} from '../../../src/ui/free_camera';
-import MercatorCoordinate, {mercatorZfromAltitude} from '../../../src/geo/mercator_coordinate';
+import Transform from '../../../src/geo/transform.js';
+import LngLat from '../../../src/geo/lng_lat.js';
+import {OverscaledTileID, CanonicalTileID} from '../../../src/source/tile_id.js';
+import {fixedNum, fixedLngLat, fixedCoord, fixedPoint, fixedVec3, fixedVec4} from '../../util/fixed.js';
+import {FreeCameraOptions} from '../../../src/ui/free_camera.js';
+import MercatorCoordinate, {mercatorZfromAltitude} from '../../../src/geo/mercator_coordinate.js';
 import {vec3, quat} from 'gl-matrix';
-import LngLatBounds from '../../../src/geo/lng_lat_bounds';
-import {extend, degToRad} from '../../../src/util/util';
+import LngLatBounds from '../../../src/geo/lng_lat_bounds.js';
+import {extend, degToRad} from '../../../src/util/util.js';
 
 test('transform', (t) => {
 
@@ -410,6 +410,7 @@ test('transform', (t) => {
                 }
                 return true;
             },
+            getMinElevationBelowMSL: () => 0
         };
     };
 
@@ -424,6 +425,7 @@ test('transform', (t) => {
                 }
                 return true;
             },
+            getMinElevationBelowMSL: () => 0
         };
     };
 
@@ -438,6 +440,7 @@ test('transform', (t) => {
                 }
                 return true;
             },
+            getMinElevationBelowMSL: () => 0
         };
     };
 
@@ -551,7 +554,8 @@ test('transform', (t) => {
             },
             exaggeration() {
                 return 10; // Low tile zoom used, exaggerate elevation to make impact.
-            }
+            },
+            getMinElevationBelowMSL: () => 0
         };
         transform.elevation = elevation;
         transform.resize(200, 200);
@@ -1157,7 +1161,8 @@ test('transform', (t) => {
             transform._elevation = {
                 getAtPoint: () => groundElevation,
                 exaggeration: () => 1.0,
-                raycast: () => undefined
+                raycast: () => undefined,
+                getMinElevationBelowMSL: () => 0
             };
 
             const expected = new FreeCameraOptions();

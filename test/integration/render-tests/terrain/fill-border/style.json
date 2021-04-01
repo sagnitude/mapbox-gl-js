@@ -4,7 +4,6 @@
     "test": {
       "height": 200,
       "width": 200,
-      "terrainDrapeFirst": false,
       "operations": [
         [
           "wait", 1500

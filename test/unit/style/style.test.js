@@ -1,20 +1,20 @@
-import {test} from '../../util/test';
+import {test} from '../../util/test.js';
 import assert from 'assert';
-import Style from '../../../src/style/style';
-import SourceCache from '../../../src/source/source_cache';
-import StyleLayer from '../../../src/style/style_layer';
-import Transform from '../../../src/geo/transform';
-import {extend} from '../../../src/util/util';
-import {RequestManager} from '../../../src/util/mapbox';
-import {Event, Evented} from '../../../src/util/evented';
-import window from '../../../src/util/window';
+import Style from '../../../src/style/style.js';
+import SourceCache from '../../../src/source/source_cache.js';
+import StyleLayer from '../../../src/style/style_layer.js';
+import Transform from '../../../src/geo/transform.js';
+import {extend} from '../../../src/util/util.js';
+import {RequestManager} from '../../../src/util/mapbox.js';
+import {Event, Evented} from '../../../src/util/evented.js';
+import window from '../../../src/util/window.js';
 import {
     setRTLTextPlugin,
     clearRTLTextPlugin,
     evented as rtlTextPluginEvented
-} from '../../../src/source/rtl_text_plugin';
-import browser from '../../../src/util/browser';
-import {OverscaledTileID} from '../../../src/source/tile_id';
+} from '../../../src/source/rtl_text_plugin.js';
+import browser from '../../../src/util/browser.js';
+import {OverscaledTileID} from '../../../src/source/tile_id.js';
 
 function createStyleJSON(properties) {
     return extend({
@@ -1806,6 +1806,64 @@ test('Style#setLayerZoomRange', (t) => {
     t.end();
 });
 
+test('Style#hasLayer, Style#has*Layers()', (t) => {
+    function createStyle() {
+        const style = new Style(new StubMap());
+        style.loadJSON({
+            "version": 8,
+            "sources": {
+                "geojson": createGeoJSONSource()
+            },
+            "layers": [{
+                "id": "symbol_id",
+                "type": "symbol",
+                "source": "geojson"
+            },
+            {
+                "id": "background_id",
+                "type": "background"
+            },
+            {
+                "id": "fill_id",
+                "type": "fill",
+                "source": "geojson"
+            },
+            {
+                "id": "line_id",
+                "type": "line",
+                "source": "geojson"
+            }]
+        });
+        return style;
+    }
+
+    const style = createStyle();
+
+    style.on('style.load', () => {
+        t.ok(style.hasLayer('symbol_id'));
+        t.ok(style.hasLayer('background_id'));
+        t.ok(style.hasLayer('fill_id'));
+        t.ok(style.hasLayer('line_id'));
+        t.notOk(style.hasLayer('non_existing_symbol_id'));
+        t.notOk(style.hasLayer('non_existing_background_id'));
+        t.notOk(style.hasLayer('non_existing_fill_id'));
+        t.notOk(style.hasLayer('non_existing_line_id'));
+
+        t.ok(style.hasSymbolLayers());
+        t.notOk(style.has3DLayers());
+        t.notOk(style.hasCircleLayers());
+
+        style.addLayer({id: 'first', source: 'geojson', type: 'fill-extrusion'});
+        style.removeLayer('symbol_id');
+
+        t.notOk(style.hasSymbolLayers());
+        t.ok(style.has3DLayers());
+        t.notOk(style.hasCircleLayers());
+
+        t.end();
+    });
+});
+
 test('Style#queryRenderedFeatures', (t) => {
     const style = new Style(new StubMap());
     const transform = new Transform();
@@ -2263,5 +2321,35 @@ test('Style#setTerrain', (t) => {
             t.end();
         });
     });
+    t.end();
+});
+
+test('Style#getTerrain', (t) => {
+    t.test('rolls up inline source into style', (t) => {
+        const style = new Style(new StubMap());
+        style.loadJSON({
+            "version": 8,
+            "sources": {},
+            "layers": [{
+                "id": "background",
+                "type": "background"
+            }]
+        });
+
+        style.on('style.load', () => {
+            style.setTerrain({
+                "source": {
+                    "type": "raster-dem",
+                    "tiles": ['http://example.com/{z}/{x}/{y}.png'],
+                    "tileSize": 256,
+                    "maxzoom": 14
+                }
+            });
+            t.ok(style.getTerrain());
+            t.deepEqual(style.getTerrain(), {"source": "terrain-dem-src"});
+            t.end();
+        });
+    });
+
     t.end();
 });

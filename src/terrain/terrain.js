@@ -1,61 +1,63 @@
 // @flow
 
 import Point from '@mapbox/point-geometry';
-import SourceCache from '../source/source_cache';
-import {OverscaledTileID} from '../source/tile_id';
-import Tile from '../source/tile';
-import rasterBoundsAttributes from '../data/raster_bounds_attributes';
-import {RasterBoundsArray, TriangleIndexArray} from '../data/array_types';
-import SegmentVector from '../data/segment';
-import Texture from '../render/texture';
-import Program from '../render/program';
-import {Uniform1i, Uniform1f, Uniform2f, Uniform4f, UniformMatrix4f} from '../render/uniform_binding';
-import {prepareDEMTexture} from '../render/draw_hillshade';
-import EXTENT from '../data/extent';
-import {clamp, warnOnce} from '../util/util';
+import SourceCache from '../source/source_cache.js';
+import {OverscaledTileID} from '../source/tile_id.js';
+import Tile from '../source/tile.js';
+import rasterBoundsAttributes from '../data/raster_bounds_attributes.js';
+import {RasterBoundsArray, TriangleIndexArray, LineIndexArray} from '../data/array_types.js';
+import SegmentVector from '../data/segment.js';
+import Texture from '../render/texture.js';
+import Program from '../render/program.js';
+import {Uniform1i, Uniform1f, Uniform2f, Uniform4f, UniformMatrix4f} from '../render/uniform_binding.js';
+import {prepareDEMTexture} from '../render/draw_hillshade.js';
+import EXTENT from '../data/extent.js';
+import {clamp, warnOnce} from '../util/util.js';
 import assert from 'assert';
 import {vec3, mat4, vec4} from 'gl-matrix';
-import getWorkerPool from '../util/global_worker_pool';
-import Dispatcher from '../util/dispatcher';
-import GeoJSONSource from '../source/geojson_source';
-import ImageSource from '../source/image_source';
-import RasterDEMTileSource from '../source/raster_dem_tile_source';
-import RasterTileSource from '../source/raster_tile_source';
-import Color from '../style-spec/util/color';
-import StencilMode from '../gl/stencil_mode';
-import {DepthStencilAttachment} from '../gl/value';
-import {drawTerrainRaster, drawTerrainDepth} from './draw_terrain_raster';
-import type RasterStyleLayer from '../style/style_layer/raster_style_layer';
-import {Elevation} from './elevation';
-import Framebuffer from '../gl/framebuffer';
-import ColorMode from '../gl/color_mode';
-import DepthMode from '../gl/depth_mode';
-import CullFaceMode from '../gl/cull_face_mode';
-import {clippingMaskUniformValues} from '../render/program/clipping_mask_program';
-import MercatorCoordinate, {mercatorZfromAltitude} from '../geo/mercator_coordinate';
-import browser from '../util/browser';
-import DEMData from '../data/dem_data';
-import rasterFade from '../render/raster_fade';
-import {create as createSource} from '../source/source';
+import getWorkerPool from '../util/global_worker_pool.js';
+import Dispatcher from '../util/dispatcher.js';
+import GeoJSONSource from '../source/geojson_source.js';
+import ImageSource from '../source/image_source.js';
+import RasterDEMTileSource from '../source/raster_dem_tile_source.js';
+import RasterTileSource from '../source/raster_tile_source.js';
+import Color from '../style-spec/util/color.js';
+import StencilMode from '../gl/stencil_mode.js';
+import {DepthStencilAttachment} from '../gl/value.js';
+import {drawTerrainRaster, drawTerrainDepth} from './draw_terrain_raster.js';
+import type RasterStyleLayer from '../style/style_layer/raster_style_layer.js';
+import {Elevation} from './elevation.js';
+import Framebuffer from '../gl/framebuffer.js';
+import ColorMode from '../gl/color_mode.js';
+import DepthMode from '../gl/depth_mode.js';
+import CullFaceMode from '../gl/cull_face_mode.js';
+import {clippingMaskUniformValues} from '../render/program/clipping_mask_program.js';
+import MercatorCoordinate, {mercatorZfromAltitude} from '../geo/mercator_coordinate.js';
+import browser from '../util/browser.js';
+import DEMData from '../data/dem_data.js';
+import rasterFade from '../render/raster_fade.js';
+import {create as createSource} from '../source/source.js';
 
-import type Map from '../ui/map';
-import type Painter from '../render/painter';
-import type Style from '../style/style';
-import type StyleLayer from '../style/style_layer';
-import type VertexBuffer from '../gl/vertex_buffer';
-import type IndexBuffer from '../gl/index_buffer';
-import type Context from '../gl/context';
-import type {UniformLocations, UniformValues} from '../render/uniform_binding';
-import type Transform from '../geo/transform';
-import type {DEMEncoding} from '../data/dem_data';
+import type Map from '../ui/map.js';
+import type Painter from '../render/painter.js';
+import type Style from '../style/style.js';
+import type StyleLayer from '../style/style_layer.js';
+import type VertexBuffer from '../gl/vertex_buffer.js';
+import type IndexBuffer from '../gl/index_buffer.js';
+import type Context from '../gl/context.js';
+import type {UniformLocations, UniformValues} from '../render/uniform_binding.js';
+import type Transform from '../geo/transform.js';
+import type {DEMEncoding} from '../data/dem_data.js';
 
 export const GRID_DIM = 128;
 
 const FBO_POOL_SIZE = 5;
 const RENDER_CACHE_MAX_SIZE = 50;
 
-// Symbols are draped only for specific cases: see _isLayerDrapedOverTerrain
-const drapedLayers = {'fill': true, 'line': true, 'background': true, "hillshade": true, "raster": true};
+type RenderBatch = {
+    start: number;
+    end: number;
+}
 
 /**
  * Proxy source cache gets ideal screen tile cover coordinates. All the other
@@ -70,7 +72,7 @@ const drapedLayers = {'fill': true, 'line': true, 'background': true, "hillshade
 class ProxySourceCache extends SourceCache {
     renderCache: Array<FBO>;
     renderCachePool: Array<number>;
-    proxyCachedFBO: {[string | number]: number};
+    proxyCachedFBO: {[string | number]: {[string | number]: number}};
 
     constructor(map: Map) {
 
@@ -126,9 +128,10 @@ class ProxySourceCache extends SourceCache {
     }
 
     freeFBO(id: string) {
-        const fboIndex = this.proxyCachedFBO[id];
-        if (fboIndex !== undefined) {
-            this.renderCachePool.push(fboIndex);
+        const fbos = this.proxyCachedFBO[id];
+        if (fbos !== undefined) {
+            const fboIds = ((Object.values(fbos): any): Array<number>);
+            this.renderCachePool.push(...fboIds);
             delete this.proxyCachedFBO[id];
         }
     }
@@ -170,18 +173,19 @@ export class Terrain extends Elevation {
     gridIndexBuffer: IndexBuffer;
     gridSegments: SegmentVector;
     gridNoSkirtSegments: SegmentVector;
+    wireframeSegments: SegmentVector;
+    wireframeIndexBuffer: IndexBuffer;
     proxiedCoords: {[string]: Array<ProxiedTileID>};
     proxyCoords: Array<OverscaledTileID>;
     proxyToSource: {[number]: {[string]: Array<ProxiedTileID>}};
     proxySourceCache: ProxySourceCache;
     renderingToTexture: boolean;
-    style: Style;
+    _style: Style;
     orthoMatrix: mat4;
     enabled: boolean;
 
-    drapeFirst: boolean;
-    drapeFirstPending: boolean;
-    forceDrapeFirst: boolean; // debugging purpose.
+    renderCached: boolean;
+    forceRenderCached: boolean; // debugging purpose.
 
     _visibleDemTiles: Array<Tile>;
     _sourceTilesOverlap: {[string]: boolean};
@@ -191,12 +195,13 @@ export class Terrain extends Elevation {
     _exaggeration: number;
     _depthFBO: Framebuffer;
     _depthTexture: Texture;
-    _depthDone: boolean;
     _previousZoom: number;
     _updateTimestamp: number;
+    _useVertexMorphing: boolean;
     pool: Array<FBO>;
     currentFBO: FBO;
     renderedToTile: boolean;
+    _drapedRenderBatches: Array<RenderBatch>;
 
     _findCoveringTileCache: {[string]: {[number]: ?number}};
 
@@ -227,6 +232,7 @@ export class Terrain extends Elevation {
         this.proxyCoords = [];
         this.proxiedCoords = {};
         this._visibleDemTiles = [];
+        this._drapedRenderBatches = [];
         this._sourceTilesOverlap = {};
         this.proxySourceCache = new ProxySourceCache(style.map);
         this.orthoMatrix = mat4.create();
@@ -238,7 +244,15 @@ export class Terrain extends Elevation {
         this._findCoveringTileCache = {};
         this._tilesDirty = {};
         this.style = style;
+        this._useVertexMorphing = true;
+        this._exaggeration = 1;
+    }
+
+    set style(style: Style) {
         style.on('data', this._onStyleDataEvent.bind(this));
+        style.on('neworder', this._checkRenderCacheEfficiency.bind(this));
+        this._style = style;
+        this._checkRenderCacheEfficiency();
     }
 
     /*
@@ -249,8 +263,7 @@ export class Terrain extends Elevation {
      */
     update(style: Style, transform: Transform, cameraChanging: boolean) {
         if (style && style.terrain) {
-            if (this.style !== style) {
-                style.on('data', this._onStyleDataEvent.bind(this));
+            if (this._style !== style) {
                 this.style = style;
             }
             this.enabled = true;
@@ -292,10 +305,20 @@ export class Terrain extends Elevation {
             this._findCoveringTileCache[this.proxySourceCache.id] = {};
             this.proxySourceCache.update(transform);
 
-            this._depthDone = false;
             this._emptyDEMTextureDirty = true;
         } else {
             this._disable();
+        }
+    }
+
+    _checkRenderCacheEfficiency() {
+        const renderCacheInfo = this.renderCacheEfficiency(this._style);
+        if (this._style.map._optimizeForTerrain) {
+            assert(renderCacheInfo.efficiency === 100);
+        } else if (renderCacheInfo.efficiency !== 100) {
+            warnOnce(`Terrain render cache efficiency is not optimal (${renderCacheInfo.efficiency}%) and performance
+                may be affected negatively, consider placing all background, fill and line layers before layer
+                with id '${renderCacheInfo.firstUndrapedLayer}' or create a map using optimizeForTerrain: true option.`);
         }
     }
 
@@ -312,9 +335,9 @@ export class Terrain extends Elevation {
         if (!this.enabled) return;
         this.enabled = false;
         this.proxySourceCache.deallocRenderCache();
-        if (this.painter.style) {
-            for (const id in this.painter.style._sourceCaches) {
-                this.painter.style._sourceCaches[id].usedForTerrain = false;
+        if (this._style) {
+            for (const id in this._style._sourceCaches) {
+                this._style._sourceCaches[id].usedForTerrain = false;
             }
         }
     }
@@ -350,6 +373,10 @@ export class Terrain extends Elevation {
         return [extent, extent];
     }
 
+    set useVertexMorphing(enable: boolean) {
+        this._useVertexMorphing = enable;
+    }
+
     // For every renderable coordinate in every source cache, assign one proxy
     // tile (see _setupProxiedCoordsForOrtho). Mapping of source tile to proxy
     // tile is modeled by ProxiedTileID. In general case, source and proxy tile
@@ -374,7 +401,8 @@ export class Terrain extends Elevation {
         }
 
         const options = this.painter.options;
-        this.drapeFirst = (options.zooming || options.moving || options.rotating || !!this.forceDrapeFirst) && !this._invalidateRenderCache;
+        this.renderCached = (options.zooming || options.moving || options.rotating || !!this.forceRenderCached) && !this._invalidateRenderCache;
+
         this._invalidateRenderCache = false;
         const coords = this.proxyCoords = psc.getIds().map((id) => {
             const tileID = psc.getTileByID(id).tileID;
@@ -391,7 +419,7 @@ export class Terrain extends Elevation {
         });
 
         this.terrainTileForTile = {};
-        const sourceCaches = this.painter.style._sourceCaches;
+        const sourceCaches = this._style._sourceCaches;
         for (const id in sourceCaches) {
             const sourceCache = sourceCaches[id];
             if (!sourceCache.used) continue;
@@ -410,10 +438,9 @@ export class Terrain extends Elevation {
         this.proxiedCoords[psc.id] = coords.map(tileID => new ProxiedTileID(tileID, tileID.key, this.orthoMatrix));
         this._assignTerrainTiles(coords);
         this._prepareDEMTextures();
-
+        this._setupDrapedRenderBatches();
         this._setupRenderCache(previousProxyToSource);
 
-        this.drapeFirstPending = this.drapeFirst;
         this.renderingToTexture = false;
         this._initFBOPool();
         this._updateTimestamp = browser.now();
@@ -530,7 +557,7 @@ export class Terrain extends Elevation {
         let prevDemTile = null;
         let morphingPhase = 1.0;
 
-        if (options && options.morphing) {
+        if (options && options.morphing && this._useVertexMorphing) {
             const srcTile = options.morphing.srcDemTile;
             const dstTile = options.morphing.dstDemTile;
             morphingPhase = options.morphing.phase;
@@ -574,34 +601,17 @@ export class Terrain extends Elevation {
         program.setTerrainUniformValues(context, uniforms);
     }
 
-    // If terrain handles layer rendering (rasterize it), return true.
-    renderLayer(layer: StyleLayer, _?: SourceCache): boolean {
-        const painter = this.painter;
-        if (painter.renderPass !== 'translucent') {
-            // Depth texture is used only for POI symbols and circles, to skip render of symbols occluded by e.g. hill.
-            if (!this._depthDone && (layer.type === 'symbol' || layer.type === 'circle')) this.drawDepth();
-            return true; // Early leave: all rendering is done in translucent pass.
-        }
-        if (this.drapeFirst && this.drapeFirstPending) {
-            this.render();
-            this.drapeFirstPending = false;
-            return true;
-        } else if (this._isLayerDrapedOverTerrain(layer)) {
-            if (this.drapeFirst && !this.renderingToTexture) {
-                // It's done. nothing to do for this layer but to advance.
-                return true;
-            }
-            this.render();
-            return true;
-        }
-        return false;
-    }
-
     // For each proxy tile, render all layers until the non-draped layer (and
     // render the tile to the screen) before advancing to the next proxy tile.
+    // Returns the last drawn index that is used as a start
+    // layer for interleaved draped rendering.
     // Apart to layer-by-layer rendering used in 2D, here we have proxy-tile-by-proxy-tile
     // rendering.
-    render() {
+    renderBatch(startLayerIndex: number): number {
+        if (this._drapedRenderBatches.length === 0) {
+            return startLayerIndex + 1;
+        }
+
         this.renderingToTexture = true;
         const painter = this.painter;
         const context = this.painter.context;
@@ -613,11 +623,12 @@ export class Terrain extends Elevation {
             this.renderingToTexture = false;
         };
 
-        const start = painter.currentLayer;
-        let end = start; // end is computed as the first next non draped layer. It is not used in drapeFirst mode.
+        // Consume batch of sequential drape layers and move next
+        const drapedLayerBatch = this._drapedRenderBatches.shift();
+        assert(drapedLayerBatch.start === startLayerIndex);
 
         let drawAsRasterCoords = [];
-        const layerIds = painter.style._order;
+        const layerIds = painter.style.order;
 
         let poolIndex = 0;
         for (let i = 0; i < proxies.length; i++) {
@@ -625,13 +636,22 @@ export class Terrain extends Elevation {
 
             // bind framebuffer and assign texture to the tile (texture used in drawTerrainRaster).
             const tile = psc.getTileByID(proxy.proxyTileKey);
-            const renderCacheIndex = psc.proxyCachedFBO[proxy.key];
-            const fbo = this.currentFBO = renderCacheIndex !== undefined ? psc.renderCache[renderCacheIndex] : this.pool[poolIndex++];
+            const renderCacheIndex = psc.proxyCachedFBO[proxy.key] ? psc.proxyCachedFBO[proxy.key][startLayerIndex] : undefined;
+
+            let fbo;
+            if (renderCacheIndex !== undefined) {
+                fbo = this.currentFBO = psc.renderCache[renderCacheIndex];
+            } else {
+                fbo = this.currentFBO = this.pool[poolIndex++];
+            }
             tile.texture = fbo.tex;
+
             if (renderCacheIndex !== undefined && !fbo.dirty) {
-                drawAsRasterCoords.push(tile.tileID); // use cached render from previous pass, no need to render again.
+                // Use cached render from previous pass, no need to render again.
+                drawAsRasterCoords.push(tile.tileID);
                 continue;
             }
+
             context.bindFramebuffer.set(fbo.fb.framebuffer);
             this.renderedToTile = false; // reset flag.
             if (fbo.dirty) {
@@ -641,23 +661,16 @@ export class Terrain extends Elevation {
             }
 
             let currentStencilSource; // There is no need to setup stencil for the same source for consecutive layers.
-            for (painter.currentLayer = start; painter.currentLayer < layerIds.length; painter.currentLayer++) {
-                const layer = painter.style._layers[layerIds[painter.currentLayer]];
+            for (let j = drapedLayerBatch.start; j <= drapedLayerBatch.end; ++j) {
+                const layer = painter.style._layers[layerIds[j]];
                 const hidden = layer.isHidden(painter.transform.zoom);
-                const draped = this._isLayerDrapedOverTerrain(layer);
-
-                if (this.drapeFirst && !draped) continue;
-                if (painter.currentLayer > end) {
-                    if (!hidden && !draped) {
-                        break;
-                    }
-                    end++;
-                }
+                assert(this._style.isLayerDraped(layer) || hidden);
                 if (hidden) continue;
 
-                const sourceCache = this.painter.style._getLayerSourceCache(layer);
+                const sourceCache = painter.style._getLayerSourceCache(layer);
                 const proxiedCoords = sourceCache ? this.proxyToSource[proxy.key][sourceCache.id] : [proxy];
                 if (!proxiedCoords) continue; // when tile is not loaded yet for the source cache.
+
                 const coords = ((proxiedCoords: any): Array<OverscaledTileID>);
                 context.viewport.set([0, 0, fbo.fb.width, fbo.fb.height]);
                 if (currentStencilSource !== (sourceCache ? sourceCache.id : null)) {
@@ -666,6 +679,7 @@ export class Terrain extends Elevation {
                 }
                 painter.renderLayer(painter, sourceCache, layer, coords);
             }
+
             fbo.dirty = this.renderedToTile;
             if (this.renderedToTile) drawAsRasterCoords.push(tile.tileID);
 
@@ -679,10 +693,63 @@ export class Terrain extends Elevation {
                 }
             }
         }
+
         setupRenderToScreen();
-        if (drawAsRasterCoords.length > 0) drawTerrainRaster(painter, this, psc, drawAsRasterCoords, this._updateTimestamp);
-        painter.currentLayer = this.drapeFirst ? -1 : end;
-        assert(!this.drapeFirst || (start === 0 && painter.currentLayer === -1));
+        if (drawAsRasterCoords.length > 0) {
+            drawTerrainRaster(painter, this, psc, drawAsRasterCoords, this._updateTimestamp);
+        }
+
+        return drapedLayerBatch.end + 1;
+    }
+
+    postRender() {
+        // Make sure we consumed all the draped terrain batches at this point
+        assert(this._drapedRenderBatches.length === 0);
+    }
+
+    renderCacheEfficiency(style: Style): Object {
+        const layerCount = style.order.length;
+
+        if (layerCount === 0) {
+            return {efficiency: 100.0};
+        }
+
+        let uncacheableLayerCount = 0;
+        let drapedLayerCount = 0;
+        let reachedUndrapedLayer = false;
+        let firstUndrapedLayer;
+
+        for (let i = 0; i < layerCount; ++i) {
+            const layer = style._layers[style.order[i]];
+            if (!this._style.isLayerDraped(layer)) {
+                if (!reachedUndrapedLayer) {
+                    reachedUndrapedLayer = true;
+                    firstUndrapedLayer = layer.id;
+                }
+            } else {
+                if (reachedUndrapedLayer) {
+                    ++uncacheableLayerCount;
+                }
+                ++drapedLayerCount;
+            }
+        }
+
+        if (drapedLayerCount === 0) {
+            return {efficiency: 100.0};
+        }
+
+        return {efficiency: (1.0 - uncacheableLayerCount / drapedLayerCount) * 100.0, firstUndrapedLayer};
+    }
+
+    getMinElevationBelowMSL(): number {
+        let min = 0.0;
+        // The maximum DEM error in meters to be conservative (SRTM).
+        const maxDEMError = 30.0;
+        this._visibleDemTiles.filter(tile => tile.dem).forEach(tile => {
+            const minMaxTree = (tile.dem: any).tree;
+            min = Math.min(min, minMaxTree.minimums[0]);
+        });
+        return min === 0.0 ? min : (min - maxDEMError) * this._exaggeration;
     }
 
     // Performs raycast against visible DEM tiles on the screen and returns the distance travelled along the ray.
@@ -763,27 +830,32 @@ export class Terrain extends Elevation {
     _shouldDisableRenderCache(): boolean {
         // Disable render caches on dynamic events due to fading.
         const isCrossFading = id => {
-            const layer = this.painter.style._layers[id];
+            const layer = this._style._layers[id];
             const isHidden = !layer.isHidden(this.painter.transform.zoom);
             const crossFade = layer.getCrossfadeParameters();
             const isFading = !!crossFade && crossFade.t !== 1;
             return layer.type !== 'custom' && !isHidden && isFading;
         };
-        return !this.drapeFirst || this.painter.style._order.some(isCrossFading);
+        return !this.renderCached || this._style.order.some(isCrossFading);
     }
 
     _clearRasterFadeFromRenderCache() {
-        for (const id in this.painter.style._sourceCaches) {
-            if (!(this.painter.style._sourceCaches[id]._source instanceof RasterTileSource)) {
-                return;
+        let hasRasterSource = false;
+        for (const id in this._style._sourceCaches) {
+            if (this._style._sourceCaches[id]._source instanceof RasterTileSource) {
+                hasRasterSource = true;
+                break;
             }
+        }
+        if (!hasRasterSource) {
+            return;
         }
 
         // Check if any raster tile is in a fading state
-        for (let i = 0; i < this.painter.style._order.length; ++i) {
-            const layer = this.painter.style._layers[this.painter.style._order[i]];
+        for (let i = 0; i < this._style.order.length; ++i) {
+            const layer = this._style._layers[this._style.order[i]];
             const isHidden = layer.isHidden(this.painter.transform.zoom);
-            const sourceCache = this.painter.style._getLayerSourceCache(layer);
+            const sourceCache = this._style._getLayerSourceCache(layer);
             if (layer.type !== 'raster' || isHidden || !sourceCache) { continue; }
 
             const rasterLayer = ((layer: any): RasterStyleLayer);
@@ -806,14 +878,62 @@ export class Terrain extends Elevation {
         }
     }
 
+    _setupDrapedRenderBatches() {
+        const layerIds = this._style.order;
+        const layerCount = layerIds.length;
+        if (layerCount === 0) {
+            return;
+        }
+
+        const batches = [];
+
+        let currentLayer = 0;
+        let layer = this._style._layers[layerIds[currentLayer]];
+        while (!this._style.isLayerDraped(layer) && layer.isHidden(this.painter.transform.zoom) && ++currentLayer < layerCount) {
+            layer = this._style._layers[layerIds[currentLayer]];
+        }
+
+        let batchStart;
+        for (; currentLayer < layerCount; ++currentLayer) {
+            const layer = this._style._layers[layerIds[currentLayer]];
+            if (layer.isHidden(this.painter.transform.zoom)) {
+                continue;
+            }
+            if (!this._style.isLayerDraped(layer)) {
+                if (batchStart !== undefined) {
+                    batches.push({start: batchStart, end: currentLayer - 1});
+                    batchStart = undefined;
+                }
+                continue;
+            }
+            if (batchStart === undefined) {
+                batchStart = currentLayer;
+            }
+        }
+
+        if (batchStart !== undefined) {
+            batches.push({start: batchStart, end: currentLayer - 1});
+        }
+
+        if (this._style.map._optimizeForTerrain) {
+            // Draped first approach should result in a single or no batch
+            assert(batches.length === 1 || batches.length === 0);
+        }
+
+        this._drapedRenderBatches = batches;
+    }
+
     _setupRenderCache(previousProxyToSource: {[number]: {[string]: Array<ProxiedTileID>}}) {
         const psc = this.proxySourceCache;
         if (this._shouldDisableRenderCache()) {
             if (psc.renderCache.length > psc.renderCachePool.length) {
-                const used = ((Object.values(psc.proxyCachedFBO): any): Array<number>);
+                const used = ((Object.values(psc.proxyCachedFBO): any): Array<{[string | number]: number}>);
                 psc.proxyCachedFBO = {};
-                assert(psc.renderCache.length === psc.renderCachePool.length + used.length);
-                psc.renderCachePool = psc.renderCachePool.concat(used);
+                for (let i = 0; i < used.length; ++i) {
+                    const fbos = ((Object.values(used[i]): any): Array<number>);
+                    psc.renderCachePool.push(...fbos);
+                }
+                assert(psc.renderCache.length === psc.renderCachePool.length);
             }
             return;
         }
@@ -845,18 +965,25 @@ export class Terrain extends Elevation {
                     ++equal;
                 }
                 // dirty === false: doesn't need to be rendered to, just use cached render.
-                psc.renderCache[psc.proxyCachedFBO[proxy.key]].dirty = equal < 0 || equal !== Object.values(prev).length;
-            } else {
-                // Assign renderCache FBO if there are available FBOs in pool.
-                let index = psc.renderCachePool.pop();
-                if (index === undefined && psc.renderCache.length < RENDER_CACHE_MAX_SIZE) {
-                    index = psc.renderCache.length;
-                    psc.renderCache.push(this._createFBO());
-                    assert(psc.renderCache.length <= coords.length);
+                for (const proxyFBO in psc.proxyCachedFBO[proxy.key]) {
+                    psc.renderCache[psc.proxyCachedFBO[proxy.key][proxyFBO]].dirty = equal < 0 || equal !== Object.values(prev).length;
                 }
-                if (index !== undefined) {
-                    psc.proxyCachedFBO[proxy.key] = index;
-                    psc.renderCache[index].dirty = true; // needs to be rendered to.
+            } else {
+                for (let j = 0; j < this._drapedRenderBatches.length; ++j) {
+                    const batch = this._drapedRenderBatches[j];
+                    // Assign renderCache FBO if there are available FBOs in pool.
+                    let index = psc.renderCachePool.pop();
+                    if (index === undefined && psc.renderCache.length < RENDER_CACHE_MAX_SIZE) {
+                        index = psc.renderCache.length;
+                        psc.renderCache.push(this._createFBO());
+                        // assert(psc.renderCache.length <= coords.length);
+                    }
+                    if (index !== undefined) {
+                        if (psc.proxyCachedFBO[proxy.key] === undefined)
+                            psc.proxyCachedFBO[proxy.key] = {};
+                        psc.proxyCachedFBO[proxy.key][batch.start] = index;
+                        psc.renderCache[index].dirty = true; // needs to be rendered to.
+                    }
                 }
             }
         }
@@ -1003,15 +1130,6 @@ export class Terrain extends Elevation {
         context.viewport.set([0, 0, width, height]);
 
         drawTerrainDepth(painter, this, psc, this.proxyCoords);
-        context.bindFramebuffer.set(null);
-        context.viewport.set([0, 0, painter.width, painter.height]);
-
-        this._depthDone = true;
-    }
-
-    _isLayerDrapedOverTerrain(styleLayer: StyleLayer): boolean {
-        if (!this.enabled) return false;
-        return drapedLayers.hasOwnProperty(styleLayer.type);
     }
 
     _setupProxiedCoordsForOrtho(sourceCache: SourceCache, sourceCoords: Array<OverscaledTileID>, previousProxyToSource: {[number]: {[string]: Array<ProxiedTileID>}}) {
@@ -1213,6 +1331,20 @@ export class Terrain extends Elevation {
         if (!sourceTiles) sourceTiles = this._tilesDirty[source] = {};
         sourceTiles[coord.key] = true;
     }
+
+    /*
+     * Lazily instantiate the wireframe index buffer and segment vector so that we don't
+     * allocate the geometry for rendering a debug wireframe until it's needed.
+     */
+    getWirefameBuffer(): [IndexBuffer, SegmentVector] {
+        if (!this.wireframeSegments) {
+            const wireframeGridIndices = createWireframeGrid(GRID_DIM + 1);
+            this.wireframeIndexBuffer = this.painter.context.createIndexBuffer(wireframeGridIndices);
+            this.wireframeSegments = SegmentVector.simpleSegment(0, 0, this.gridBuffer.length, wireframeGridIndices.length);
+        }
+        return [this.wireframeIndexBuffer, this.wireframeSegments];
+    }
+
 }
 
 function sortByDistanceToCamera(tileIDs, painter) {
@@ -1290,6 +1422,44 @@ function createGrid(count: number): [RasterBoundsArray, TriangleIndexArray, numb
         }
     });
     return [boundsArray, indexArray, skirtIndicesOffset];
+}
+
+/**
+ * Creates a grid of indices corresponding to the grid constructed by createGrid
+ * in order to render that grid as a wireframe rather than a solid  mesh. It does
+ * not create a skirt and so only goes from 1 to count + 1, e.g. for count of 2:
+ *  -------------
+ *  |    /|    /|
+ *  |  /  |  /  |
+ *  |/    |/    |
+ *  -------------
+ *  |    /|    /|
+ *  |  /  |  /  |
+ *  |/    |/    |
+ *  -------------
+ * @param {number} count Count of rows and columns
+ * @private
+ */
+function createWireframeGrid(count: number): LineIndexArray {
+    let i, j, index;
+    const indexArray = new LineIndexArray();
+    const size = count + 2;
+    // Draw two edges of a quad and its diagonal. The very last row and column have
+    // an additional line to close off the grid.
+    for (j = 1; j < count; j++) {
+        for (i = 1; i < count; i++) {
+            index = j * size + i;
+            indexArray.emplaceBack(index, index + 1);
+            indexArray.emplaceBack(index, index + size);
+            indexArray.emplaceBack(index + 1, index + size);
+
+            // Place an extra line at the end of each row
+            if (j === count - 1) indexArray.emplaceBack(index + size, index + size + 1);
+        }
+        // Place an extra line at the end of each col
+        indexArray.emplaceBack(index + 1, index + 1 + size);
+    }
+    return indexArray;
 }
 
 export type TerrainUniformsType = {|

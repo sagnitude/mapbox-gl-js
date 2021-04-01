@@ -1,22 +1,22 @@
-import {test} from '../../util/test';
-import {extend} from '../../../src/util/util';
-import {createMap} from '../../util';
-import DEMData from '../../../src/data/dem_data';
-import {RGBAImage} from '../../../src/util/image';
-import MercatorCoordinate from '../../../src/geo/mercator_coordinate';
-import window from '../../../src/util/window';
-import {OverscaledTileID} from '../../../src/source/tile_id';
-import styleSpec from '../../../src/style-spec/reference/latest';
-import Terrain from '../../../src/style/terrain';
-import Tile from '../../../src/source/tile';
-import {VertexMorphing} from '../../../src/terrain/draw_terrain_raster';
-import {fixedLngLat, fixedCoord, fixedPoint} from '../../util/fixed';
+import {test} from '../../util/test.js';
+import {extend} from '../../../src/util/util.js';
+import {createMap} from '../../util/index.js';
+import DEMData from '../../../src/data/dem_data.js';
+import {RGBAImage} from '../../../src/util/image.js';
+import MercatorCoordinate from '../../../src/geo/mercator_coordinate.js';
+import window from '../../../src/util/window.js';
+import {OverscaledTileID} from '../../../src/source/tile_id.js';
+import styleSpec from '../../../src/style-spec/reference/latest.js';
+import Terrain from '../../../src/style/terrain.js';
+import Tile from '../../../src/source/tile.js';
+import {VertexMorphing} from '../../../src/terrain/draw_terrain_raster.js';
+import {fixedLngLat, fixedCoord, fixedPoint} from '../../util/fixed.js';
 import Point from '@mapbox/point-geometry';
-import LngLat from '../../../src/geo/lng_lat';
-import Marker from '../../../src/ui/marker';
-import Popup from '../../../src/ui/popup';
-import simulate from '../../util/simulate_interaction';
-import {createConstElevationDEM, setMockElevationTerrain} from '../../util/dem_mock';
+import LngLat from '../../../src/geo/lng_lat.js';
+import Marker from '../../../src/ui/marker.js';
+import Popup from '../../../src/ui/popup.js';
+import simulate from '../../util/simulate_interaction.js';
+import {createConstElevationDEM, setMockElevationTerrain} from '../../util/dem_mock.js';
 
 function createStyle() {
     return {
@@ -50,6 +50,31 @@ const createGradientDEM = () => {
             if (word[1] === 256) {
                 word[1] = 0;
                 word[0] += 1;
+            }
+        }
+    }
+    return new DEMData(0, new RGBAImage({height: TILE_SIZE + 2, width: TILE_SIZE + 2}, pixels), "mapbox", false, true);
+};
+
+const createNegativeGradientDEM = () => {
+    const pixels = new Uint8Array((TILE_SIZE + 2) * (TILE_SIZE + 2) * 4);
+    // 1, 134, 160 encodes 0m.
+    const word = [1, 134, 160];
+    for (let j = 1; j < TILE_SIZE + 1; j++) {
+        for (let i = 1; i < TILE_SIZE + 1; i++) {
+            const index = (j * (TILE_SIZE + 2) + i) * 4;
+            pixels[index] = word[0];
+            pixels[index + 1] = word[1];
+            pixels[index + 2] = word[2];
+            // Decrement word for next pixel.
+            word[2] -= 1;
+            if (word[2] === 0) {
+                word[2] = 256;
+                word[1] -= 1;
+            }
+            if (word[1] === 0) {
+                word[1] = 256;
+                word[0] -= 1;
             }
         }
     }
@@ -391,11 +416,6 @@ test('Elevation', (t) => {
                         t.end();
                     }
                 });
-                t.test('Source other:mapbox-dem is cleared from cache', t => {
-                    t.ok(map.painter.terrain._tilesDirty.hasOwnProperty('other:mapbox-dem'));
-                    t.true(map.painter.terrain._tilesDirty['other:mapbox-dem']['0']);
-                    t.end();
-                });
                 const cache = map.style._getSourceCache('trace');
                 cache.transform = map.painter.transform;
                 cache._addTile(new OverscaledTileID(0, 0, 0, 0, 0));
@@ -436,10 +456,10 @@ test('Elevation', (t) => {
                 onAdd: () => {},
                 render: () => {}
             };
-            map.addLayer(customLayer, 'background');
+            map.addLayer(customLayer);
             map.setTerrain({"source": "mapbox-dem"});
             map.once('render', () => {
-                map.painter.terrain.drapeFirst = true;
+                map.painter.terrain.renderCached = true;
                 t.false(map.painter.terrain._shouldDisableRenderCache());
                 t.end();
             });
@@ -553,6 +573,8 @@ test('Raycast projection 2D/3D', t => {
         }
     });
 
+    map.transform._horizonShift = 0;
+
     map.once('style.load', () => {
         setMockElevationTerrain(map, zeroDem, TILE_SIZE);
         map.once('render', () => {
@@ -605,6 +627,91 @@ test('Raycast projection 2D/3D', t => {
                 t.end();
             });
         });
+    });
+});
+
+test('Negative Elevation', (t) => {
+    t.beforeEach((callback) => {
+        window.useFakeXMLHttpRequest();
+        callback();
+    });
+
+    t.afterEach((callback) => {
+        window.restore();
+        callback();
+    });
+
+    const map = createMap(t, {
+        style: createStyle()
+    });
+
+    const assertAlmostEqual = (t, actual, expected, epsilon = 1e-6) => {
+        t.ok(Math.abs(actual - expected) < epsilon);
+    };
+
+    map.on('style.load', () => {
+        map.addSource('mapbox-dem', {
+            "type": "raster-dem",
+            "tiles": ['http://example.com/{z}/{x}/{y}.png'],
+            "tileSize": TILE_SIZE,
+            "maxzoom": 14
+        });
+        const cache = map.style._getSourceCache('mapbox-dem');
+        cache.used = cache._sourceLoaded = true;
+        const mockDem = (dem, cache) => {
+            cache._loadTile = (tile, callback) => {
+                tile.dem = dem;
+                tile.needsHillshadePrepare = true;
+                tile.needsDEMTextureUpload = true;
+                tile.state = 'loaded';
+                callback(null);
+            };
+        };
+        t.test('sampling with negative elevation', t => {
+            mockDem(createNegativeGradientDEM(), cache);
+            map.setTerrain({"source": "mapbox-dem"});
+            map.once('render', () => {
+                map._updateTerrain();
+                t.test('negative elevation', t => {
+                    const minElevation = map.painter.terrain.getMinElevationBelowMSL();
+                    assertAlmostEqual(t, minElevation, -1671.55);
+                    cache.clearTiles();
+                    t.end();
+                });
+                t.end();
+            });
+        });
+
+        t.test('sampling with negative elevation and exaggeration', t => {
+            mockDem(createNegativeGradientDEM(), cache);
+            map.setTerrain({"source": "mapbox-dem", "exaggeration": 1.5});
+            map.once('render', () => {
+                map._updateTerrain();
+                t.test('negative elevation with exaggeration', t => {
+                    const minElevation = map.painter.terrain.getMinElevationBelowMSL();
+                    assertAlmostEqual(t, minElevation, -2507.325);
+                    cache.clearTiles();
+                    t.end();
+                });
+                t.end();
+            });
+        });
+
+        t.test('sampling with no negative elevation', t => {
+            mockDem(createGradientDEM(), cache);
+            map.setTerrain({"source": "mapbox-dem"});
+            map.once('render', () => {
+                map._updateTerrain();
+                t.test('no negative elevation', t => {
+                    const minElevation = map.painter.terrain.getMinElevationBelowMSL();
+                    t.deepEqual(minElevation, 0);
+                    cache.clearTiles();
+                    t.end();
+                });
+                t.end();
+            });
+        });
+        t.end();
     });
 });
 
@@ -762,6 +869,318 @@ test('Vertex morphing', (t) => {
     t.end();
 });
 
+test('Render cache efficiency', (t) => {
+    t.test('Optimized for terrain, various efficiency', (t) => {
+        const map = createMap(t, {
+            style: {
+                version: 8,
+                center: [85, 85],
+                zoom: 2.1,
+                sources: {
+                    'mapbox-dem': {
+                        type: 'raster-dem',
+                        tiles: ['http://example.com/{z}/{x}/{y}.png'],
+                        tileSize: 512,
+                        maxzoom: 14
+                    },
+                    geojson: {
+                        type: 'geojson',
+                        data: {
+                            type: 'Point',
+                            coordinates: [
+                                0,
+                                0
+                            ]
+                        }
+                    }
+                },
+                layers: []
+            },
+            optimizeForTerrain: false
+        });
+
+        map.on('style.load', () => {
+            const cache = map.style._getSourceCache('mapbox-dem');
+            cache._loadTile = (tile, callback) => {
+                const pixels = new Uint8Array((512 + 2) * (512 + 2) * 4);
+                tile.dem = new DEMData(0, new RGBAImage({height: 512 + 2, width: 512 + 2}, pixels));
+                tile.needsHillshadePrepare = true;
+                tile.needsDEMTextureUpload = true;
+                tile.state = 'loaded';
+                callback(null);
+            };
+            map.setTerrain({'source': 'mapbox-dem'});
+            map.once('render', () => {
+                map._updateTerrain();
+                map.addLayer({
+                    'id': 'background',
+                    'type': 'background'
+                });
+
+                // Stub console.warn to prevent test fail
+                const warn = console.warn;
+                console.warn = (_) => {};
+
+                t.test('Cache efficiency 1', (t) => {
+                    map.addLayer({
+                        'id': 'undraped1',
+                        'type': 'symbol',
+                        'source': 'geojson'
+                    });
+                    const renderCacheInfo = map.painter.terrain.renderCacheEfficiency(map.painter.style);
+                    t.equal(renderCacheInfo.efficiency, 100);
+                    map.removeLayer('undraped1');
+                    t.end();
+                });
+
+                t.test('Cache efficiency 2', (t) => {
+                    map.addLayer({
+                        'id': 'draped1',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'draped2',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'undraped1',
+                        'type': 'symbol',
+                        'source': 'geojson'
+                    });
+                    const renderCacheInfo = map.painter.terrain.renderCacheEfficiency(map.painter.style);
+                    t.equal(renderCacheInfo.efficiency, 100);
+                    map.removeLayer('draped1');
+                    map.removeLayer('draped2');
+                    map.removeLayer('undraped1');
+                    t.end();
+                });
+
+                t.test('Cache efficiency 3', (t) => {
+                    map.addLayer({
+                        'id': 'draped1',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'draped2',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'undraped1',
+                        'type': 'symbol',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'draped3',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    const renderCacheInfo = map.painter.terrain.renderCacheEfficiency(map.painter.style);
+                    t.equal(renderCacheInfo.efficiency, 75);
+                    map.removeLayer('draped1');
+                    map.removeLayer('draped2');
+                    map.removeLayer('draped3');
+                    map.removeLayer('undraped1');
+                    t.end();
+                });
+
+                t.test('Cache efficiency 4', (t) => {
+                    map.addLayer({
+                        'id': 'draped1',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'undraped1',
+                        'type': 'symbol',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'draped2',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'draped3',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    const renderCacheInfo = map.painter.terrain.renderCacheEfficiency(map.painter.style);
+                    t.equal(renderCacheInfo.efficiency, 50);
+                    map.removeLayer('draped1');
+                    map.removeLayer('draped2');
+                    map.removeLayer('draped3');
+                    map.removeLayer('undraped1');
+                    t.end();
+                });
+
+                console.warn = warn;
+
+                t.end();
+            });
+        });
+    });
+
+    t.test('Optimized for terrain, 100% efficiency', (t) => {
+        const map = createMap(t, {
+            style: {
+                version: 8,
+                center: [85, 85],
+                zoom: 2.1,
+                sources: {
+                    'mapbox-dem': {
+                        type: 'raster-dem',
+                        tiles: ['http://example.com/{z}/{x}/{y}.png'],
+                        tileSize: 512,
+                        maxzoom: 14
+                    },
+                    geojson: {
+                        type: 'geojson',
+                        data: {
+                            type: 'Point',
+                            coordinates: [
+                                0,
+                                0
+                            ]
+                        }
+                    }
+                },
+                layers: []
+            },
+            optimizeForTerrain: true
+        });
+
+        map.on('style.load', () => {
+            const cache = map.style._getSourceCache('mapbox-dem');
+            cache._loadTile = (tile, callback) => {
+                const pixels = new Uint8Array((512 + 2) * (512 + 2) * 4);
+                tile.dem = new DEMData(0, new RGBAImage({height: 512 + 2, width: 512 + 2}, pixels));
+                tile.needsHillshadePrepare = true;
+                tile.needsDEMTextureUpload = true;
+                tile.state = 'loaded';
+                callback(null);
+            };
+            map.setTerrain({'source': 'mapbox-dem'});
+            map.once('render', () => {
+                map._updateTerrain();
+                map.addLayer({
+                    'id': 'background',
+                    'type': 'background'
+                });
+
+                // Stub console.warn to prevent test fail
+                const warn = console.warn;
+                console.warn = (_) => {};
+
+                t.test('Cache efficiency 1', (t) => {
+                    map.addLayer({
+                        'id': 'undraped1',
+                        'type': 'symbol',
+                        'source': 'geojson'
+                    });
+                    const renderCacheInfo = map.painter.terrain.renderCacheEfficiency(map.painter.style);
+                    t.equal(renderCacheInfo.efficiency, 100);
+                    map.removeLayer('undraped1');
+                    t.end();
+                });
+
+                t.test('Cache efficiency 2', (t) => {
+                    map.addLayer({
+                        'id': 'draped1',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'draped2',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'undraped1',
+                        'type': 'symbol',
+                        'source': 'geojson'
+                    });
+                    const renderCacheInfo = map.painter.terrain.renderCacheEfficiency(map.painter.style);
+                    t.equal(renderCacheInfo.efficiency, 100);
+                    map.removeLayer('draped1');
+                    map.removeLayer('draped2');
+                    map.removeLayer('undraped1');
+                    t.end();
+                });
+
+                t.test('Cache efficiency 3', (t) => {
+                    map.addLayer({
+                        'id': 'draped1',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'draped2',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'undraped1',
+                        'type': 'symbol',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'draped3',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    const renderCacheInfo = map.painter.terrain.renderCacheEfficiency(map.painter.style);
+                    t.equal(renderCacheInfo.efficiency, 100);
+                    map.removeLayer('draped1');
+                    map.removeLayer('draped2');
+                    map.removeLayer('draped3');
+                    map.removeLayer('undraped1');
+                    t.end();
+                });
+
+                t.test('Cache efficiency 4', (t) => {
+                    map.addLayer({
+                        'id': 'draped1',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'undraped1',
+                        'type': 'symbol',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'draped2',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    map.addLayer({
+                        'id': 'draped3',
+                        'type': 'fill',
+                        'source': 'geojson'
+                    });
+                    const renderCacheInfo = map.painter.terrain.renderCacheEfficiency(map.painter.style);
+                    t.equal(renderCacheInfo.efficiency, 100);
+                    map.removeLayer('draped1');
+                    map.removeLayer('draped2');
+                    map.removeLayer('draped3');
+                    map.removeLayer('undraped1');
+                    t.end();
+                });
+
+                console.warn = warn;
+
+                t.end();
+            });
+        });
+    });
+
+    t.end();
+});
+
 test('Marker interaction and raycast', (t) => {
     const map = createMap(t, {
         style: extend(createStyle(), {
@@ -794,6 +1213,7 @@ test('Marker interaction and raycast', (t) => {
             "tileSize": TILE_SIZE,
             "maxzoom": 14
         });
+        map.transform._horizonShift = 0;
         const cache = map.style._getSourceCache('mapbox-dem');
         cache.used = cache._sourceLoaded = true;
         cache._loadTile = (tile, callback) => {
@@ -884,6 +1304,7 @@ test('terrain getBounds', (t) => {
     });
     map.setPitch(85);
     map.setZoom(13);
+    map.transform._horizonShift = 0;
 
     const tr = map.transform;
     map.once('style.load', () => {
@@ -905,7 +1326,7 @@ test('terrain getBounds', (t) => {
         };
 
         t.deepEqual(map.getBounds().getCenter().lng.toFixed(10), 0, 'horizon, no terrain getBounds');
-        t.deepEqual(map.getBounds().getCenter().lat.toFixed(10), 0.4076172064, 'horizon, no terrain getBounds');
+        t.ok(Math.abs(map.getBounds().getCenter().lat.toFixed(10) - 0.4076172064) < 0.0000001, 'horizon, no terrain getBounds');
 
         map.setTerrain({"source": "mapbox-dem"});
         map.once('render', () => {

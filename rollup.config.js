@@ -1,8 +1,8 @@
 import fs from 'fs';
 import sourcemaps from 'rollup-plugin-sourcemaps';
-import {plugins} from './build/rollup_plugins';
-import banner from './build/banner';
-import {getBabelOutputPlugin} from '@rollup/plugin-babel';
+import {plugins} from './build/rollup_plugins.js';
+import banner from './build/banner.js';
+import {fileURLToPath} from 'url';
 
 const {BUILD, MINIFY} = process.env;
 const minified = MINIFY === 'true';
@@ -12,17 +12,16 @@ const bench = BUILD === 'bench';
 function buildType(build, minified) {
     switch (build) {
         case 'production':
-            if (minified) return 'dist/mapbox-gl-2.0.0.js';
-            return 'dist/mapbox-gl-unminified-2.0.0.js';
+            if (minified) return 'dist/mapbox-gl.js';
+            return 'dist/mapbox-gl-unminified.js';
         case 'bench':
-            return 'dist/mapbox-gl-bench-2.0.0.js';
+            return 'dist/mapbox-gl-bench.js';
         case 'dev':
-            return 'dist/mapbox-gl-dev-2.0.0.js';
+            return 'dist/mapbox-gl-dev.js';
         default:
-            return 'dist/mapbox-gl-dev-2.0.0.js';
+            return 'dist/mapbox-gl-dev.js';
     }
 }
-
 const outputFile = buildType(BUILD, MINIFY);
 
 export default [{
@@ -52,27 +51,16 @@ export default [{
     output: {
         name: 'mapboxgl',
         file: outputFile,
-        // format: 'esm',
         format: 'umd',
         sourcemap: production ? true : 'inline',
         indent: false,
-        intro: fs.readFileSync(require.resolve('./rollup/bundle_prelude.js'), 'utf8'),
+        intro: fs.readFileSync(fileURLToPath(new URL('./rollup/bundle_prelude.js', import.meta.url)), 'utf8'),
         banner
     },
     treeshake: false,
     plugins: [
         // Ingest the sourcemaps produced in the first step of the build.
         // This is the only reason we use Rollup for this second pass
-        // getBabelOutputPlugin({
-        //     presets: [
-        //         ['@babel/preset-env', {modules: 'umd'}]
-        //     ],
-        //     minified: false,
-        //     compact: false,
-        //     generatorOpts: {},
-        //     moduleId: 'mapboxgl',
-        //     moduleRoot: 'default',
-        // }),
         sourcemaps()
     ],
 }];

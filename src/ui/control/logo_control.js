@@ -1,10 +1,10 @@
 // @flow
 
-import DOM from '../../util/dom';
+import DOM from '../../util/dom.js';
 
-import {bindAll} from '../../util/util';
+import {bindAll} from '../../util/util.js';
 
-import type Map from '../map';
+import type Map from '../map.js';
 
 /**
  * A `LogoControl` is a control that adds the Mapbox watermark
@@ -62,7 +62,7 @@ class LogoControl {
     }
 
     _logoRequired() {
-        if (!this._map.style) return;
+        if (!this._map.style) return true;
         const sourceCaches = this._map.style._sourceCaches;
         if (Object.entries(sourceCaches).length === 0) return true;
         for (const id in sourceCaches) {

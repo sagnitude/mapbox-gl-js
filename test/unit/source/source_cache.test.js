@@ -1,15 +1,15 @@
-import {test} from '../../util/test';
-import SourceCache from '../../../src/source/source_cache';
-import {create, setType} from '../../../src/source/source';
-import Tile from '../../../src/source/tile';
-import {QueryGeometry} from '../../../src/style/query_geometry';
-import {OverscaledTileID} from '../../../src/source/tile_id';
-import Transform from '../../../src/geo/transform';
-import LngLat from '../../../src/geo/lng_lat';
+import {test} from '../../util/test.js';
+import SourceCache from '../../../src/source/source_cache.js';
+import {create, setType} from '../../../src/source/source.js';
+import Tile from '../../../src/source/tile.js';
+import {QueryGeometry} from '../../../src/style/query_geometry.js';
+import {OverscaledTileID} from '../../../src/source/tile_id.js';
+import Transform from '../../../src/geo/transform.js';
+import LngLat from '../../../src/geo/lng_lat.js';
 import Point from '@mapbox/point-geometry';
-import {Event, ErrorEvent, Evented} from '../../../src/util/evented';
-import {extend} from '../../../src/util/util';
-import browser from '../../../src/util/browser';
+import {Event, ErrorEvent, Evented} from '../../../src/util/evented.js';
+import {extend} from '../../../src/util/util.js';
+import browser from '../../../src/util/browser.js';
 
 // Add a mocked source type for use in these tests
 function MockSourceType(id, sourceOptions, _dispatcher, eventedParent) {
@@ -687,10 +687,6 @@ test('SourceCache#update', (t) => {
             if (e.sourceDataType === 'metadata') {
                 sourceCache.update(transform);
                 t.deepEqual(sourceCache.getIds(), [
-                    new OverscaledTileID(11, 0, 11, 1024, 1022).key,
-                    new OverscaledTileID(11, 0, 11, 1023, 1022).key,
-                    new OverscaledTileID(12, 0, 12, 2048, 2046).key,
-                    new OverscaledTileID(12, 0, 12, 2047, 2046).key,
                     new OverscaledTileID(13, 0, 13, 4096, 4094).key,
                     new OverscaledTileID(13, 0, 13, 4095, 4094).key,
                     new OverscaledTileID(14, 0, 14, 8192, 8192).key,
@@ -704,7 +700,7 @@ test('SourceCache#update', (t) => {
                 transform.center = new LngLat(0, -0.005);
                 sourceCache.update(transform);
 
-                t.deepEqual(sourceCache.getRenderableIds().length, 14);
+                t.deepEqual(sourceCache.getRenderableIds().length, 10);
                 t.end();
             }
         });

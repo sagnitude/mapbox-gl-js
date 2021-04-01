@@ -1,17 +1,17 @@
 // @flow
 
 import Point from '@mapbox/point-geometry';
-import {getBounds, clamp, polygonizeBounds, bufferConvexPolygon} from '../util/util';
-import {polygonIntersectsBox} from '../util/intersection_tests';
-import EXTENT from '../data/extent';
+import {getBounds, clamp, polygonizeBounds, bufferConvexPolygon} from '../util/util.js';
+import {polygonIntersectsBox} from '../util/intersection_tests.js';
+import EXTENT from '../data/extent.js';
 import type {PointLike} from '@mapbox/point-geometry';
-import type Transform from '../geo/transform';
-import type Tile from '../source/tile';
-import pixelsToTileUnits from '../source/pixels_to_tile_units';
+import type Transform from '../geo/transform.js';
+import type Tile from '../source/tile.js';
+import pixelsToTileUnits from '../source/pixels_to_tile_units.js';
 import {vec3} from 'gl-matrix';
-import {Ray} from '../util/primitives';
-import MercatorCoordinate from '../geo/mercator_coordinate';
-import type {OverscaledTileID} from '../source/tile_id';
+import {Ray} from '../util/primitives.js';
+import MercatorCoordinate from '../geo/mercator_coordinate.js';
+import type {OverscaledTileID} from '../source/tile_id.js';
 
 /**
  * A data-class that represents a screenspace query from `Map#queryRenderedFeatures`.
@@ -48,9 +48,9 @@ export class QueryGeometry {
      * Factory method to help contruct an instance  while accounting for current map state.
      *
      * @static
-     * @param {(PointLike | [PointLike, PointLike])} geometry
-     * @param {Transform} transform
-     * @returns {QueryGeometry}
+     * @param {(PointLike | [PointLike, PointLike])} geometry The query geometry.
+     * @param {Transform} transform The current map transform.
+     * @returns {QueryGeometry} An instance of the QueryGeometry class.
      */
     static createFromScreenPoints(geometry: PointLike | [PointLike, PointLike], transform: Transform): QueryGeometry {
         let screenGeometry;
@@ -70,14 +70,23 @@ export class QueryGeometry {
     }
 
     /**
+     * Returns true if the initial query by the user was a single point
+     *
+     * @returns {boolean} True if the initial query geometry was a single point
+     */
+    isPointQuery(): boolean {
+        return this.screenBounds.length === 1;
+    }
+
+    /**
      * Due to data-driven styling features do not uniform size(eg `circle-radius`) and can be offset differntly
      * from their original location(for eg. with `*-translate`). This means we have to expand our query region for
      * each tile to account for variation in these properties.
      * Each tile calculates a tile level max padding value (in screenspace pixels) when its parsed, this function
      * lets us calculate a buffered version of the screenspace query geometry for each tile.
      *
-     * @param {number} buffer
-     * @returns {Point[]}
+     * @param {number} buffer The tile padding in screenspace pixels.
+     * @returns {Point[]} The buffered query geometry.
      */
     bufferedScreenGeometry(buffer: number): Point[] {
         return polygonizeBounds(
@@ -92,29 +101,84 @@ export class QueryGeometry {
      * the query at the surface of the earth. Instead the feature may be closer and only intersect
      * the query because it extrudes into the air.
      *
-     * This returns a geometry thats a triangle, with the base of the triangle being the far points
-     * of the query frustum, and the top of the triangle being the point underneath the camera.
+     * This returns a geometry thats a convex polygon that encomapasses the query frustum and the point underneath the camera.
      * Similar to `bufferedScreenGeometry`, buffering is added to account for variation in paint properties.
      *
-     * @param {number} buffer
-     * @returns {Point[]}
+     *
+     * Case 1: point underneath camera is exactly behind query volume
+     *              +----------+
+     *              |          |
+     *              |          |
+     *              |          |
+     *              +          +
+     *               X        X
+     *                X      X
+     *                 X    X
+     *                  X  X
+     *                   XX
+     *
+     *
+     *
+     *
+     * Case 2: point is behind and to the right
+     *              +----------+
+     *              |          X
+     *              |           X
+     *              |           XX
+     *              +            X
+     *              XXX          XX
+     *                 XXXX       X
+     *                    XXX     XX
+     *                        XX   X
+     *                           XXX
+     *
+     *
+     *
+     * Case 3: point is behind and to the left
+     *              +----------+
+     *             X           |
+     *             X           |
+     *            XX           |
+     *            X            +
+     *           X          XXXX
+     *          XX       XXX
+     *          X    XXXX
+     *         X XXXX
+     *         XXX
+     *
+     *
+     *
+     * @param {number} buffer The tile padding in screenspace pixels.
+     * @returns {Point[]} The buffered query geometry.
      */
     bufferedCameraGeometry(buffer: number): Point[] {
-        const cameraTriangle = [
-            this.screenBounds[0],
-            this.screenBounds.length === 1 ? this.screenBounds[0].add(new Point(1, 0)) : this.screenBounds[1],
-            this.cameraPoint
-        ];
+        const min = this.screenBounds[0];
+        const max = this.screenBounds.length === 1 ? this.screenBounds[0].add(new Point(1, 1)) : this.screenBounds[1];
+        const cameraPolygon = polygonizeBounds(min, max, 0, false);
 
-        return bufferConvexPolygon(cameraTriangle, buffer);
+        // Only need to account for point underneath camera if its behind query volume
+        if (this.cameraPoint.y > max.y) {
+            //case 1: insert point in the middle
+            if (this.cameraPoint.x > min.x && this.cameraPoint.x < max.x) {
+                cameraPolygon.splice(3, 0, this.cameraPoint);
+            //case 2: replace btm right point
+            } else if (this.cameraPoint.x >= max.x) {
+                cameraPolygon[2] = this.cameraPoint;
+            //case 3: replace btm left point
+            } else if (this.cameraPoint.x <= min.x) {
+                cameraPolygon[3] = this.cameraPoint;
+            }
+        }
+
+        return bufferConvexPolygon(cameraPolygon, buffer);
     }
 
     /**
      * Checks if a tile is contained within this query geometry.
      *
-     * @param {Tile} tile
-     * @param {Transform} transform
-     * @param {boolean} use3D
+     * @param {Tile} tile The tile to check.
+     * @param {Transform} transform The current map transform.
+     * @param {boolean} use3D A boolean indicating whether to query 3D features.
      * @returns {?TilespaceQueryGeometry} Returns undefined if the tile does not intersect
      */
     containsTile(tile: Tile, transform: Transform, use3D: boolean): ?TilespaceQueryGeometry {
