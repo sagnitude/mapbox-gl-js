@@ -2,30 +2,31 @@
 
 import Point from '@mapbox/point-geometry';
 
-import loadGeometry from './load_geometry';
-import toEvaluationFeature from './evaluation_feature';
-import EXTENT from './extent';
-import featureFilter from '../style-spec/feature_filter';
+import loadGeometry from './load_geometry.js';
+import toEvaluationFeature from './evaluation_feature.js';
+import EXTENT from './extent.js';
+import featureFilter from '../style-spec/feature_filter/index.js';
 import Grid from 'grid-index';
-import DictionaryCoder from '../util/dictionary_coder';
+import DictionaryCoder from '../util/dictionary_coder.js';
 import vt from '@mapbox/vector-tile';
 import Protobuf from 'pbf';
-import GeoJSONFeature from '../util/vectortile_to_geojson';
-import {arraysIntersect, mapObject, extend} from '../util/util';
-import {OverscaledTileID} from '../source/tile_id';
-import {register} from '../util/web_worker_transfer';
-import EvaluationParameters from '../style/evaluation_parameters';
-import SourceFeatureState from '../source/source_state';
-import {polygonIntersectsBox} from '../util/intersection_tests';
-import {PossiblyEvaluated} from '../style/properties';
-import {FeatureIndexArray} from './array_types';
-import {DEMSampler} from '../terrain/elevation';
+import GeoJSONFeature from '../util/vectortile_to_geojson.js';
+import {arraysIntersect, mapObject, extend} from '../util/util.js';
+import {OverscaledTileID} from '../source/tile_id.js';
+import {register} from '../util/web_worker_transfer.js';
+import EvaluationParameters from '../style/evaluation_parameters.js';
+import SourceFeatureState from '../source/source_state.js';
+import {polygonIntersectsBox} from '../util/intersection_tests.js';
+import {PossiblyEvaluated} from '../style/properties.js';
+import {FeatureIndexArray} from './array_types.js';
+import {DEMSampler} from '../terrain/elevation.js';
 
-import type StyleLayer from '../style/style_layer';
-import type {FeatureFilter} from '../style-spec/feature_filter';
-import type Transform from '../geo/transform';
-import type {FilterSpecification, PromoteIdSpecification} from '../style-spec/types';
-import type {TilespaceQueryGeometry} from '../style/query_geometry';
+import type StyleLayer from '../style/style_layer.js';
+import type {FeatureFilter} from '../style-spec/feature_filter/index.js';
+import type Transform from '../geo/transform.js';
+import type {FilterSpecification, PromoteIdSpecification} from '../style-spec/types.js';
+import type {TilespaceQueryGeometry} from '../style/query_geometry.js';
+import type {FeatureIndex as FeatureIndexStruct} from './array_types.js';
 
 type QueryParameters = {
     pixelPosMatrix: Float32Array,
@@ -37,6 +38,13 @@ type QueryParameters = {
         availableImages: Array<string>
     }
 }
+
+type FeatureIndices = {
+    bucketIndex: number,
+    sourceLayerIndex: number,
+    featureIndex: number,
+    layoutVertexArrayOffset: number
+} | FeatureIndexStruct;
 
 class FeatureIndex {
     tileID: OverscaledTileID;
@@ -63,9 +71,9 @@ class FeatureIndex {
         this.promoteId = promoteId;
     }
 
-    insert(feature: VectorTileFeature, geometry: Array<Array<Point>>, featureIndex: number, sourceLayerIndex: number, bucketIndex: number) {
+    insert(feature: VectorTileFeature, geometry: Array<Array<Point>>, featureIndex: number, sourceLayerIndex: number, bucketIndex: number, layoutVertexArrayOffset: number = 0) {
         const key = this.featureIndexArray.length;
-        this.featureIndexArray.emplaceBack(featureIndex, sourceLayerIndex, bucketIndex);
+        this.featureIndexArray.emplaceBack(featureIndex, sourceLayerIndex, bucketIndex, layoutVertexArrayOffset);
 
         const grid = this.grid;
 
@@ -131,21 +139,19 @@ class FeatureIndex {
             let featureGeometry = null;
             this.loadMatchingFeature(
                 result,
-                match.bucketIndex,
-                match.sourceLayerIndex,
-                match.featureIndex,
+                match,
                 filter,
                 params.layers,
                 params.availableImages,
                 styleLayers,
                 serializedLayers,
                 sourceFeatureState,
-                (feature: VectorTileFeature, styleLayer: StyleLayer, featureState: Object) => {
+                (feature: VectorTileFeature, styleLayer: StyleLayer, featureState: Object, layoutVertexArrayOffset: number = 0) => {
                     if (!featureGeometry) {
                         featureGeometry = loadGeometry(feature);
                     }
 
-                    return styleLayer.queryIntersectsFeature(tilespaceGeometry, feature, featureState, featureGeometry, this.z, args.transform, args.pixelPosMatrix, elevationHelper);
+                    return styleLayer.queryIntersectsFeature(tilespaceGeometry, feature, featureState, featureGeometry, this.z, args.transform, args.pixelPosMatrix, elevationHelper, layoutVertexArrayOffset);
                 }
             );
         }
@@ -155,17 +161,16 @@ class FeatureIndex {
 
     loadMatchingFeature(
         result: {[_: string]: Array<{ featureIndex: number, feature: GeoJSONFeature }>},
-        bucketIndex: number,
-        sourceLayerIndex: number,
-        featureIndex: number,
+        featureIndexData: FeatureIndices,
         filter: FeatureFilter,
         filterLayerIDs: Array<string>,
         availableImages: Array<string>,
         styleLayers: {[_: string]: StyleLayer},
         serializedLayers: {[_: string]: Object},
         sourceFeatureState?: SourceFeatureState,
-        intersectionTest?: (feature: VectorTileFeature, styleLayer: StyleLayer, featureState: Object, id: string | number | void) => boolean | number) {
+        intersectionTest?: (feature: VectorTileFeature, styleLayer: StyleLayer, featureState: Object, layoutVertexArrayOffset: number) => boolean | number) {
 
+        const {featureIndex, bucketIndex, sourceLayerIndex, layoutVertexArrayOffset} = featureIndexData;
         const layerIDs = this.bucketLayerIDs[bucketIndex];
         if (filterLayerIDs && !arraysIntersect(filterLayerIDs, layerIDs))
             return;
@@ -207,7 +212,7 @@ class FeatureIndex {
             serializedLayer.paint = evaluateProperties(serializedLayer.paint, styleLayer.paint, feature, featureState, availableImages);
             serializedLayer.layout = evaluateProperties(serializedLayer.layout, styleLayer.layout, feature, featureState, availableImages);
 
-            const intersectionZ = !intersectionTest || intersectionTest(feature, styleLayer, featureState);
+            const intersectionZ = !intersectionTest || intersectionTest(feature, styleLayer, featureState, layoutVertexArrayOffset);
             if (!intersectionZ) {
                 // Only applied for non-symbol features
                 continue;
@@ -240,10 +245,12 @@ class FeatureIndex {
 
         for (const symbolFeatureIndex of symbolFeatureIndexes) {
             this.loadMatchingFeature(
-                result,
-                bucketIndex,
-                sourceLayerIndex,
-                symbolFeatureIndex,
+                result, {
+                    bucketIndex,
+                    sourceLayerIndex,
+                    featureIndex: symbolFeatureIndex,
+                    layoutVertexArrayOffset: 0
+                },
                 filter,
                 filterLayerIDs,
                 availableImages,

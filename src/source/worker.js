@@ -1,16 +1,17 @@
 // @flow
 
-import Actor from '../util/actor';
+import Actor from '../util/actor.js';
 
-import StyleLayerIndex from '../style/style_layer_index';
-import VectorTileWorkerSource from './vector_tile_worker_source';
-import RasterDEMTileWorkerSource from './raster_dem_tile_worker_source';
-import GeoJSONWorkerSource from './geojson_worker_source';
+import StyleLayerIndex from '../style/style_layer_index.js';
+import VectorTileWorkerSource from './vector_tile_worker_source.js';
+import RasterDEMTileWorkerSource from './raster_dem_tile_worker_source.js';
+import GeoJSONWorkerSource from './geojson_worker_source.js';
 import assert from 'assert';
-import {plugin as globalRTLTextPlugin} from './rtl_text_plugin';
-import {enforceCacheSizeLimit} from '../util/tile_request_cache';
-import {extend} from '../util/util';
-import {PerformanceUtils} from '../util/performance';
+import {plugin as globalRTLTextPlugin} from './rtl_text_plugin.js';
+import {enforceCacheSizeLimit} from '../util/tile_request_cache.js';
+import {extend} from '../util/util.js';
+import {PerformanceUtils} from '../util/performance.js';
+import {Event} from '../util/evented.js';
 
 import type {
     WorkerSource,
@@ -19,12 +20,12 @@ import type {
     WorkerTileCallback,
     WorkerDEMTileCallback,
     TileParameters
-} from '../source/worker_source';
+} from '../source/worker_source.js';
 
-import type {WorkerGlobalScopeInterface} from '../util/web_worker';
-import type {Callback} from '../types/callback';
-import type {LayerSpecification} from '../style-spec/types';
-import type {PluginState} from './rtl_text_plugin';
+import type {WorkerGlobalScopeInterface} from '../util/web_worker.js';
+import type {Callback} from '../types/callback.js';
+import type {LayerSpecification} from '../style-spec/types.js';
+import type {PluginState} from './rtl_text_plugin.js';
 
 /**
  * @private
@@ -37,6 +38,7 @@ export default class Worker {
     workerSourceTypes: {[_: string]: Class<WorkerSource> };
     workerSources: {[_: string]: {[_: string]: {[_: string]: WorkerSource } } };
     demWorkerSources: {[_: string]: {[_: string]: RasterDEMTileWorkerSource } };
+    isSpriteLoaded: boolean;
     referrer: ?string;
     terrain: ?boolean;
 
@@ -47,6 +49,7 @@ export default class Worker {
 
         this.layerIndexes = {};
         this.availableImages = {};
+        this.isSpriteLoaded = false;
 
         this.workerSourceTypes = {
             vector: VectorTileWorkerSource,
@@ -82,6 +85,19 @@ export default class Worker {
 
     setReferrer(mapID: string, referrer: string) {
         this.referrer = referrer;
+    }
+
+    spriteLoaded(mapId: string, bool: boolean) {
+        this.isSpriteLoaded = bool;
+        for (const workerSource in this.workerSources[mapId]) {
+            const ws = this.workerSources[mapId][workerSource];
+            for (const source in ws) {
+                if (ws[source] instanceof VectorTileWorkerSource) {
+                    ws[source].isSpriteLoaded = bool;
+                    ws[source].fire(new Event('isSpriteLoaded'));
+                }
+            }
+        }
     }
 
     setImages(mapId: string, images: Array<string>, callback: WorkerTileCallback) {
@@ -219,12 +235,12 @@ export default class Worker {
             // use a wrapped actor so that we can attach a target mapId param
             // to any messages invoked by the WorkerSource
             const actor = {
-                send: (type, data, callback, mustQueue, _, metadata) => {
+                send: (type, data, callback, _, mustQueue, metadata) => {
                     this.actor.send(type, data, callback, mapId, mustQueue, metadata);
                 },
                 scheduler: this.actor.scheduler
             };
-            this.workerSources[mapId][type][source] = new (this.workerSourceTypes[type]: any)((actor: any), this.getLayerIndex(mapId), this.getAvailableImages(mapId));
+            this.workerSources[mapId][type][source] = new (this.workerSourceTypes[type]: any)((actor: any), this.getLayerIndex(mapId), this.getAvailableImages(mapId), this.isSpriteLoaded);
         }
 
         return this.workerSources[mapId][type][source];
