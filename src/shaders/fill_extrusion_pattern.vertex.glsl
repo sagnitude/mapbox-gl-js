@@ -79,7 +79,7 @@ void main() {
         ? pos_nx.xy // extrusion top
         : vec2(edgedistance, z * u_height_factor); // extrusion side
 
-    v_image_index = (normal.x == 1.0 && normal.y == 0.0 && normal.z == 16384.0) ? 1.0 : 0.0;
+    v_image_index = normal.z == 1.0 ? 1.0 : 0.0;
 
     v_pos_a = get_pattern_pos(u_pixel_coord_upper, u_pixel_coord_lower, fromScale * display_size_a, tileRatio, pos);
     v_pos_b = get_pattern_pos(u_pixel_coord_upper, u_pixel_coord_lower, toScale * display_size_b, tileRatio, pos);
